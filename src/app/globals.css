@@ -1,0 +1,101 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 68 59% 86%;
+  --foreground: 0 0% 20%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 20%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 20%;
+
+  --primary: 174 46% 51%;
+  --primary-foreground: 0 0% 98%;
+
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 0 0% 9%;
+
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 45%;
+
+  --accent: 15 100% 70%;
+  --accent-foreground: 0 0% 9%;
+
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 0 0% 89%;
+  --input: 0 0% 89%;
+  --ring: 174 46% 51%;
+
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: 222 47% 11%;
+  --foreground: 0 0% 98%;
+
+  --card: 222 47% 11%;
+  --card-foreground: 0 0% 98%;
+
+  --popover: 222 47% 11%;
+  --popover-foreground: 0 0% 98%;
+
+  --primary: 174 46% 51%;
+  --primary-foreground: 0 0% 9%;
+
+  --secondary: 217 33% 17%;
+  --secondary-foreground: 0 0% 98%;
+
+  --muted: 217 33% 17%;
+  --muted-foreground: 215 20% 65%;
+
+  --accent: 15 100% 70%;
+  --accent-foreground: 0 0% 98%;
+
+  --destructive: 0 63% 31%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 217 33% 17%;
+  --input: 217 33% 17%;
+  --ring: 174 46% 51%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    min-height: 100vh;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer components {
+  .glass-effect {
+    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  
+  .gradient-text {
+    background: linear-gradient(135deg, hsl(174 46% 51%), hsl(15 100% 70%));
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
