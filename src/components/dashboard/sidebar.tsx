@@ -42,6 +42,11 @@ const navigation = [
     href: '/dashboard/settings',
     icon: Settings,
   },
+   {
+    name: 'Security',
+    href: '/dashboard/security',
+    icon: Shield,
+  },
 ]
 
 export function DashboardSidebar() {

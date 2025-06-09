@@ -1,14 +1,13 @@
-
-// 📁 src/components/file-upload/file-upload-zone.tsx (Drag & drop upload component)
+// 📁 src/components/file-upload/file-upload-zone.tsx (FIXED VERSION)
 'use client'
 
 import { useState, useCallback } from 'react'
-import { useDropzone } from 'react-dropzone'
+import { useDropzone, FileRejection } from 'react-dropzone'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
-import { Upload, X, File, Image, Video } from 'lucide-react'
+import { Upload, X, File, Image, Video, AlertCircle } from 'lucide-react'
 import { StorageService } from '@/lib/storage'
 import { toast } from 'sonner'
 
@@ -28,8 +27,16 @@ export function FileUploadZone({
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadingFiles, setUploadingFiles] = useState<string[]>([])
+  const [rejectedFiles, setRejectedFiles] = useState<FileRejection[]>([])
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+  const onDrop = useCallback(async (acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
+    // Handle rejected files
+    if (rejectedFiles && rejectedFiles.length > 0) {
+      setRejectedFiles(rejectedFiles)
+      // Clear rejected files after 5 seconds
+      setTimeout(() => setRejectedFiles([]), 5000)
+    }
+
     if (acceptedFiles.length === 0) return
 
     setUploading(true)
@@ -38,13 +45,14 @@ export function FileUploadZone({
     try {
       for (let i = 0; i < acceptedFiles.length; i++) {
         const file = acceptedFiles[i]
-        setUploadProgress((i / acceptedFiles.length) * 100)
+        setUploadProgress(((i + 1) / acceptedFiles.length) * 100)
 
         try {
           const result = await StorageService.uploadFile(file, capsuleId)
           onFileUploaded(result)
           toast.success(`Uploaded ${file.name}`)
         } catch (error: any) {
+          console.error('Upload error:', error)
           toast.error(`Failed to upload ${file.name}: ${error.message}`)
         }
       }
@@ -55,7 +63,7 @@ export function FileUploadZone({
     }
   }, [capsuleId, onFileUploaded])
 
-  const { getRootProps, getInputProps, isDragActive, rejectedFiles } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
       'image/*': ['.jpeg', '.jpg', '.png', '.gif', '.webp'],
@@ -69,7 +77,11 @@ export function FileUploadZone({
     },
     maxSize: 50 * 1024 * 1024, // 50MB
     maxFiles,
-    disabled: uploading
+    disabled: uploading,
+    onDropRejected: (rejectedFiles) => {
+      setRejectedFiles(rejectedFiles)
+      setTimeout(() => setRejectedFiles([]), 5000)
+    }
   })
 
   return (
@@ -123,6 +135,7 @@ export function FileUploadZone({
         </CardContent>
       </Card>
 
+      {/* Upload Progress */}
       {uploading && (
         <Card>
           <CardContent className="p-4">
@@ -136,8 +149,9 @@ export function FileUploadZone({
               <Progress value={uploadProgress} className="h-2" />
               <div className="space-y-1">
                 {uploadingFiles.map((fileName, index) => (
-                  <div key={index} className="text-xs text-muted-foreground">
-                    📁 {fileName}
+                  <div key={index} className="text-xs text-muted-foreground flex items-center">
+                    <File className="h-3 w-3 mr-1" />
+                    {fileName}
                   </div>
                 ))}
               </div>
@@ -146,17 +160,34 @@ export function FileUploadZone({
         </Card>
       )}
 
+      {/* Rejected Files */}
       {rejectedFiles.length > 0 && (
-        <Card className="border-red-200">
+        <Card className="border-red-200 bg-red-50">
           <CardContent className="p-4">
-            <h4 className="text-sm font-medium text-red-600 mb-2">
-              Some files were rejected:
-            </h4>
-            {rejectedFiles.map(({ file, errors }) => (
-              <div key={file.name} className="text-xs text-red-600">
-                {file.name}: {errors.map(e => e.message).join(', ')}
+            <div className="flex items-start space-x-2">
+              <AlertCircle className="h-4 w-4 text-red-500 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="text-sm font-medium text-red-800 mb-2">
+                  Some files were rejected:
+                </h4>
+                <div className="space-y-1">
+                  {rejectedFiles.map(({ file, errors }, index) => (
+                    <div key={index} className="text-xs text-red-700">
+                      <span className="font-medium">{file.name}:</span>{' '}
+                      {errors.map(e => e.message).join(', ')}
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setRejectedFiles([])}
+                className="text-red-600 hover:text-red-700"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}

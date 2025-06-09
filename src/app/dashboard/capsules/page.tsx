@@ -1,10 +1,10 @@
-
-// 📁 src/app/dashboard/capsules/page.tsx (Updated with Files button)
+// 📁 src/app/dashboard/capsules/page.tsx (UPDATED - Fix View Button)
 'use client'
 
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -25,11 +25,18 @@ import {
   Eye,
   Edit,
   Trash2,
-  File  // Added File icon import
+  File  
 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { useCapsuleStore } from '@/store/capsules'
 import { formatDate, formatFileSize } from '@/lib/utils'
 import { DataType } from '@/types'
+import { toast } from 'sonner'
 
 const dataTypeIcons: Record<DataType, React.ComponentType<any>> = {
   text: FileText,
@@ -65,10 +72,12 @@ const itemVariants = {
 }
 
 export default function CapsulesPage() {
-  const { capsules, fetchCapsules, isLoading } = useCapsuleStore()
+  const router = useRouter()
+  const { capsules, fetchCapsules, deleteCapsule, isLoading } = useCapsuleStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [filteredCapsules, setFilteredCapsules] = useState(capsules)
+  const [deletingCapsules, setDeletingCapsules] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetchCapsules()
@@ -84,6 +93,35 @@ export default function CapsulesPage() {
     )
     setFilteredCapsules(filtered)
   }, [searchQuery, capsules])
+
+  const handleViewCapsule = (capsuleId: string) => {
+    router.push(`/dashboard/capsules/${capsuleId}`)
+  }
+
+  const handleDeleteCapsule = async (capsuleId: string, title: string) => {
+    if (deletingCapsules.has(capsuleId)) return
+    
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${title}"? This action cannot be undone.`
+    )
+    
+    if (!confirmed) return
+    
+    setDeletingCapsules(prev => new Set(prev).add(capsuleId))
+    
+    try {
+      await deleteCapsule(capsuleId)
+      toast.success(`Deleted "${title}"`)
+    } catch (error: any) {
+      toast.error(`Failed to delete capsule: ${error.message}`)
+    } finally {
+      setDeletingCapsules(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(capsuleId)
+        return newSet
+      })
+    }
+  }
 
   return (
     <motion.div
@@ -211,9 +249,35 @@ export default function CapsulesPage() {
                           {capsule.description || 'No description'}
                         </CardDescription>
                       </div>
-                      <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleViewCapsule(capsule.id)}>
+                            <Eye className="h-4 w-4 mr-2" />
+                            View
+                          </DropdownMenuItem>
+                          <DropdownMenuItem>
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteCapsule(capsule.id, capsule.title)}
+                            disabled={deletingCapsules.has(capsule.id)}
+                            className="text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            {deletingCapsules.has(capsule.id) ? 'Deleting...' : 'Delete'}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </CardHeader>
                   
@@ -275,19 +339,29 @@ export default function CapsulesPage() {
                       <div>Last accessed: {formatDate(capsule.lastAccessedAt)}</div>
                     </div>
 
-                    {/* Actions - WITH FILES BUTTON ADDED */}
+                    {/* Actions - WITH WORKING VIEW BUTTON */}
                     <div className="flex space-x-2 pt-2">
-                      <Button size="sm" variant="outline" className="flex-1">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="flex-1"
+                        onClick={() => handleViewCapsule(capsule.id)}
+                      >
                         <Eye className="h-3 w-3 mr-1" />
                         <span className="hidden sm:inline">View</span>
                       </Button>
-                      <Link href={`/dashboard/capsules/${capsule.id}/files`}>
-                        <Button size="sm" variant="outline" className="flex-1">
+                      <Link href={`/dashboard/capsules/${capsule.id}/files`} className="flex-1">
+                        <Button size="sm" variant="outline" className="w-full">
                           <File className="h-3 w-3 mr-1" />
                           <span className="hidden sm:inline">Files</span>
                         </Button>
                       </Link>
-                      <Button size="sm" variant="outline">
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => handleDeleteCapsule(capsule.id, capsule.title)}
+                        disabled={deletingCapsules.has(capsule.id)}
+                      >
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
