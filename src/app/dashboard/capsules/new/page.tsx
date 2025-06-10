@@ -507,7 +507,7 @@ export default function EnhancedNewCapsulePage() {
                     <div className="flex items-start space-x-3">
                       <Checkbox
                         checked={formData.selectedDataTypes.includes(type.id)}
-                        readOnly
+                        disabled
                       />
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-1">
