@@ -1,6 +1,6 @@
 // 📁 src/store/capsules.ts (COMPLETE INTEGRATION - Replace existing file)
 import { create } from 'zustand'
-import { Capsule, DashboardStats } from '@/types'
+import { Capsule, DashboardStats, CapsuleContent } from '@/types'
 import { SecureCapsuleService, SecureCapsule } from '@/lib/secure-capsules'
 
 interface CapsuleStore {
@@ -123,16 +123,35 @@ export const useCapsuleStore = create<CapsuleStore>((set, get) => ({
       const currentCapsule = capsules.find(c => c.id === id)
       if (!currentCapsule) throw new Error('Capsule not found')
 
+      // Ensure content is in the correct format for saving
+      let contentToSave: CapsuleContent
+      if (updates.content) {
+        contentToSave = updates.content as CapsuleContent
+      } else {
+        // If the current capsule content is encrypted, we need the unlocked version
+        const { unlockedCapsules } = get()
+        const unlockedContent = unlockedCapsules.get(id)
+        if (unlockedContent) {
+          contentToSave = unlockedContent
+        } else if ((currentCapsule.content as any)?.encrypted) {
+          // Content is encrypted and we don't have unlocked version
+          throw new Error('Cannot update encrypted capsule without password or unlocked content')
+        } else {
+          contentToSave = currentCapsule.content as CapsuleContent
+        }
+      }
+
       // Merge updates with current data
       const updatedData = {
         userId: currentCapsule.userId,
         title: updates.title || currentCapsule.title,
         description: updates.description !== undefined ? updates.description : currentCapsule.description,
         dataTypes: updates.dataTypes || currentCapsule.dataTypes,
-        content: updates.content || currentCapsule.content,
+        content: contentToSave,
         metadata: { ...currentCapsule.metadata, ...updates.metadata },
         sharing: { ...currentCapsule.sharing, ...updates.sharing },
-        security: { ...currentCapsule.security, ...updates.security }
+        security: { ...currentCapsule.security, ...updates.security },
+        lastAccessedAt: updates.lastAccessedAt || currentCapsule.lastAccessedAt
       }
 
       const updatedCapsule = await SecureCapsuleService.saveCapsule(
@@ -213,7 +232,7 @@ export const useCapsuleStore = create<CapsuleStore>((set, get) => ({
       set({ capsules: updatedCapsules })
       
       // Cache decrypted content if password was provided and content was decrypted
-      if (password && capsule.content && !capsule.content.encrypted) {
+      if (password && capsule.content && !(capsule.content as any).encrypted) {
         const newUnlocked = new Map(unlockedCapsules)
         newUnlocked.set(id, capsule.content)
         set({ unlockedCapsules: newUnlocked })
@@ -357,8 +376,16 @@ export const useCapsuleStore = create<CapsuleStore>((set, get) => ({
     set({ error: null })
     
     try {
-      // Get current capsule with old password
+      // Get current capsule with old password (this will decrypt it)
       const capsule = await SecureCapsuleService.getCapsule(capsuleId, oldPassword)
+      
+      // Ensure we have the decrypted content
+      let contentToSave: CapsuleContent
+      if ((capsule.content as any)?.encrypted) {
+        throw new Error('Failed to decrypt content with old password')
+      } else {
+        contentToSave = capsule.content as CapsuleContent
+      }
       
       // Re-save with new password
       await SecureCapsuleService.saveCapsule(
@@ -367,10 +394,11 @@ export const useCapsuleStore = create<CapsuleStore>((set, get) => ({
           title: capsule.title,
           description: capsule.description,
           dataTypes: capsule.dataTypes,
-          content: capsule.content,
+          content: contentToSave,
           metadata: capsule.metadata,
           sharing: capsule.sharing,
-          security: capsule.security
+          security: capsule.security,
+          lastAccessedAt: capsule.lastAccessedAt
         },
         newPassword,
         capsuleId
@@ -379,7 +407,7 @@ export const useCapsuleStore = create<CapsuleStore>((set, get) => ({
       // Update unlocked cache
       const { unlockedCapsules } = get()
       const newUnlocked = new Map(unlockedCapsules)
-      newUnlocked.set(capsuleId, capsule.content)
+      newUnlocked.set(capsuleId, contentToSave)
       set({ unlockedCapsules: newUnlocked })
       
       console.log('✅ Changed password for capsule:', capsuleId)

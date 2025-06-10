@@ -1,5 +1,4 @@
-
-// 📁 src/app/dashboard/layout.tsx (UPDATED with PWA awareness)
+// 📁 src/app/dashboard/layout.tsx (UPDATED with PWA awareness + footer)
 'use client'
 
 import { useAuth } from '@/hooks/useAuth'
@@ -7,6 +6,7 @@ import { usePWA } from '@/hooks/usePWA'
 import { useEffect } from 'react'
 import { DashboardSidebar } from '@/components/dashboard/sidebar'
 import { DashboardHeader } from '@/components/dashboard/header'
+import { DashboardFooter } from '@/components/dashboard/footer'
 import { Badge } from '@/components/ui/badge'
 import { WifiOff } from 'lucide-react'
 
@@ -32,19 +32,14 @@ export default function DashboardLayout({
       <div className="flex-1 flex flex-col overflow-hidden">
         <DashboardHeader />
         
-        {/* PWA Status Bar */}
-        {isInstalled && (
-          <div className="bg-primary/5 border-b px-6 py-2 flex items-center justify-between">
+        {/* PWA Status Bar - Only show if offline and installed */}
+        {isInstalled && !isOnline && (
+          <div className="bg-amber-50 border-b px-6 py-2 flex items-center justify-center">
             <div className="flex items-center space-x-2">
-              <Badge variant="outline" className="text-xs">
-                📱 PWA Mode
-              </Badge>
-              {!isOnline && (
-                <Badge variant="destructive" className="text-xs">
-                  <WifiOff className="h-3 w-3 mr-1" />
-                  Offline
-                </Badge>
-              )}
+              <WifiOff className="h-4 w-4 text-amber-600" />
+              <span className="text-sm text-amber-800 font-medium">
+                You're offline. Some features may be limited.
+              </span>
             </div>
           </div>
         )}
@@ -54,6 +49,8 @@ export default function DashboardLayout({
             {children}
           </div>
         </main>
+
+        <DashboardFooter />
       </div>
     </div>
   )
