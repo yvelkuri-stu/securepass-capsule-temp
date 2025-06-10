@@ -1,4 +1,5 @@
-// 📁 src/store/capsules.ts (UPDATED - Secure Version)
+
+// 📁 src/store/capsules.ts (COMPLETE SECURE VERSION - Replace existing file)
 import { create } from 'zustand'
 import { Capsule, DashboardStats } from '@/types'
 import { SecureCapsuleService, SecureCapsule } from '@/lib/secure-capsules'
@@ -6,11 +7,12 @@ import { SecureCapsuleService, SecureCapsule } from '@/lib/secure-capsules'
 interface SecureCapsuleStore {
   capsules: SecureCapsule[]
   selectedCapsule: SecureCapsule | null
+  unlockedCapsules: Map<string, any> // Store decrypted content temporarily
   isLoading: boolean
   error: string | null
   dashboardStats: DashboardStats | null
   
-  // Capsule management
+  // Core capsule management
   fetchCapsules: () => Promise<void>
   createCapsule: (
     capsule: Omit<Capsule, 'id' | 'createdAt' | 'updatedAt'>, 
@@ -23,13 +25,17 @@ interface SecureCapsuleStore {
   ) => Promise<void>
   deleteCapsule: (id: string) => Promise<void>
   
-  // Capsule access
+  // Secure capsule access
   getCapsule: (id: string, password?: string) => Promise<SecureCapsule>
+  unlockCapsule: (id: string, password: string) => Promise<SecureCapsule>
+  lockCapsule: (id: string) => void
+  isUnlocked: (id: string) => boolean
   selectCapsule: (capsule: SecureCapsule | null) => void
   
-  // Security features
+  // Security operations
   addPasswordProtection: (capsuleId: string, password: string) => Promise<void>
   removePasswordProtection: (capsuleId: string, currentPassword: string) => Promise<void>
+  changePassword: (capsuleId: string, oldPassword: string, newPassword: string) => Promise<void>
   verifyPassword: (capsuleId: string, password: string) => Promise<boolean>
   updateCapsuleContent: (capsuleId: string, content: any, password?: string) => Promise<void>
   
@@ -37,11 +43,13 @@ interface SecureCapsuleStore {
   fetchDashboardStats: () => Promise<void>
   clearError: () => void
   setLoading: (loading: boolean) => void
+  clearUnlockedData: () => void
 }
 
 export const useCapsuleStore = create<SecureCapsuleStore>((set, get) => ({
   capsules: [],
   selectedCapsule: null,
+  unlockedCapsules: new Map(),
   isLoading: false,
   error: null,
   dashboardStats: null,
@@ -82,6 +90,14 @@ export const useCapsuleStore = create<SecureCapsuleStore>((set, get) => ({
         isLoading: false 
       })
       
+      // If capsule was created with content and password, store unlocked version
+      if (password && capsuleData.content) {
+        const { unlockedCapsules } = get()
+        const newUnlocked = new Map(unlockedCapsules)
+        newUnlocked.set(newCapsule.id, capsuleData.content)
+        set({ unlockedCapsules: newUnlocked })
+      }
+      
       return newCapsule
     } catch (error: any) {
       console.error('❌ Store create error:', error)
@@ -99,16 +115,25 @@ export const useCapsuleStore = create<SecureCapsuleStore>((set, get) => ({
     
     try {
       const updatedCapsule = await SecureCapsuleService.saveCapsule(
-        updates as any, // Type assertion for compatibility
+        updates as any,
         password,
         id
       )
       
-      const { capsules } = get()
+      const { capsules, unlockedCapsules } = get()
       const updatedCapsules = capsules.map(capsule =>
         capsule.id === id ? updatedCapsule : capsule
       )
       set({ capsules: updatedCapsules })
+
+      // Update unlocked content if available
+      if (password && updates.content) {
+        const newUnlocked = new Map(unlockedCapsules)
+        newUnlocked.set(id, updates.content)
+        set({ unlockedCapsules: newUnlocked })
+      }
+      
+      console.log('✅ Capsule updated:', id)
     } catch (error: any) {
       console.error('❌ Store update error:', error)
       set({ error: error.message || 'Failed to update capsule' })
@@ -116,12 +141,11 @@ export const useCapsuleStore = create<SecureCapsuleStore>((set, get) => ({
     }
   },
 
-  // Delete capsule
+  // Delete capsule and cleanup
   deleteCapsule: async (id: string) => {
     set({ error: null })
     
     try {
-      // Use the basic CapsuleService for deletion since SecureCapsuleService doesn't have it
       const { supabase } = await import('@/lib/supabase')
       const { error } = await supabase
         .from('capsules')
@@ -130,9 +154,17 @@ export const useCapsuleStore = create<SecureCapsuleStore>((set, get) => ({
 
       if (error) throw error
 
-      const { capsules } = get()
+      const { capsules, unlockedCapsules } = get()
       const filteredCapsules = capsules.filter(capsule => capsule.id !== id)
-      set({ capsules: filteredCapsules })
+      
+      // Remove from unlocked data
+      const newUnlocked = new Map(unlockedCapsules)
+      newUnlocked.delete(id)
+      
+      set({ 
+        capsules: filteredCapsules,
+        unlockedCapsules: newUnlocked
+      })
       
       console.log('✅ Capsule deleted:', id)
     } catch (error: any) {
@@ -142,19 +174,26 @@ export const useCapsuleStore = create<SecureCapsuleStore>((set, get) => ({
     }
   },
 
-  // Get and decrypt a specific capsule
+  // Get capsule (may require password for encrypted content)
   getCapsule: async (id: string, password?: string) => {
     set({ error: null })
     
     try {
       const capsule = await SecureCapsuleService.getCapsule(id, password)
       
-      // Update the capsule in our local state if it exists
-      const { capsules } = get()
+      // Update the capsule in our local state
+      const { capsules, unlockedCapsules } = get()
       const updatedCapsules = capsules.map(c => 
         c.id === id ? capsule : c
       )
       set({ capsules: updatedCapsules })
+      
+      // Store decrypted content if password was provided
+      if (password && capsule.content && !capsule.content.encrypted) {
+        const newUnlocked = new Map(unlockedCapsules)
+        newUnlocked.set(id, capsule.content)
+        set({ unlockedCapsules: newUnlocked })
+      }
       
       return capsule
     } catch (error: any) {
@@ -162,6 +201,52 @@ export const useCapsuleStore = create<SecureCapsuleStore>((set, get) => ({
       set({ error: error.message || 'Failed to access capsule' })
       throw error
     }
+  },
+
+  // Unlock and decrypt a capsule
+  unlockCapsule: async (id: string, password: string) => {
+    set({ error: null })
+    
+    try {
+      const capsule = await SecureCapsuleService.getCapsule(id, password)
+      
+      // Store decrypted content
+      const { unlockedCapsules, capsules } = get()
+      const newUnlocked = new Map(unlockedCapsules)
+      newUnlocked.set(id, capsule.content)
+      
+      // Update capsule in list
+      const updatedCapsules = capsules.map(c => 
+        c.id === id ? capsule : c
+      )
+      
+      set({ 
+        unlockedCapsules: newUnlocked,
+        capsules: updatedCapsules
+      })
+      
+      console.log('✅ Capsule unlocked:', id)
+      return capsule
+    } catch (error: any) {
+      console.error('❌ Unlock error:', error)
+      set({ error: error.message || 'Failed to unlock capsule' })
+      throw error
+    }
+  },
+
+  // Lock a capsule (remove from unlocked data)
+  lockCapsule: (id: string) => {
+    const { unlockedCapsules } = get()
+    const newUnlocked = new Map(unlockedCapsules)
+    newUnlocked.delete(id)
+    set({ unlockedCapsules: newUnlocked })
+    console.log('🔒 Capsule locked:', id)
+  },
+
+  // Check if capsule is unlocked
+  isUnlocked: (id: string) => {
+    const { unlockedCapsules } = get()
+    return unlockedCapsules.has(id)
   },
 
   // Select a capsule for viewing
@@ -177,7 +262,7 @@ export const useCapsuleStore = create<SecureCapsuleStore>((set, get) => ({
       await SecureCapsuleService.addPasswordProtection(capsuleId, password)
       
       // Update the capsule in our local state
-      const { capsules } = get()
+      const { capsules, unlockedCapsules } = get()
       const updatedCapsules = capsules.map(capsule =>
         capsule.id === capsuleId 
           ? { 
@@ -187,7 +272,15 @@ export const useCapsuleStore = create<SecureCapsuleStore>((set, get) => ({
             }
           : capsule
       )
-      set({ capsules: updatedCapsules })
+      
+      // Remove from unlocked data since it's now encrypted
+      const newUnlocked = new Map(unlockedCapsules)
+      newUnlocked.delete(capsuleId)
+      
+      set({ 
+        capsules: updatedCapsules,
+        unlockedCapsules: newUnlocked
+      })
       
       console.log('✅ Password protection added to capsule:', capsuleId)
     } catch (error: any) {
@@ -225,6 +318,44 @@ export const useCapsuleStore = create<SecureCapsuleStore>((set, get) => ({
     }
   },
 
+  // Change capsule password
+  changePassword: async (capsuleId: string, oldPassword: string, newPassword: string) => {
+    set({ error: null })
+    
+    try {
+      // First decrypt with old password
+      const capsule = await SecureCapsuleService.getCapsule(capsuleId, oldPassword)
+      
+      // Then re-encrypt with new password
+      await SecureCapsuleService.saveCapsule(
+        {
+          userId: capsule.userId,
+          title: capsule.title,
+          description: capsule.description,
+          dataTypes: capsule.dataTypes,
+          content: capsule.content,
+          metadata: capsule.metadata,
+          sharing: capsule.sharing,
+          security: capsule.security
+        },
+        newPassword,
+        capsuleId
+      )
+      
+      // Update unlocked data with new content
+      const { unlockedCapsules } = get()
+      const newUnlocked = new Map(unlockedCapsules)
+      newUnlocked.set(capsuleId, capsule.content)
+      set({ unlockedCapsules: newUnlocked })
+      
+      console.log('✅ Password changed for capsule:', capsuleId)
+    } catch (error: any) {
+      console.error('❌ Change password error:', error)
+      set({ error: error.message || 'Failed to change password' })
+      throw error
+    }
+  },
+
   // Verify password for a capsule
   verifyPassword: async (capsuleId: string, password: string) => {
     try {
@@ -244,14 +375,26 @@ export const useCapsuleStore = create<SecureCapsuleStore>((set, get) => ({
     try {
       await SecureCapsuleService.updateCapsuleContent(capsuleId, content, password)
       
-      // Optionally refresh the capsule in local state
-      const { capsules } = get()
+      // Update local state
+      const { capsules, unlockedCapsules } = get()
       const updatedCapsules = capsules.map(capsule =>
         capsule.id === capsuleId 
           ? { ...capsule, content: password ? { encrypted: true } : content }
           : capsule
       )
-      set({ capsules: updatedCapsules })
+      
+      // Update unlocked content if not encrypted
+      let newUnlocked = new Map(unlockedCapsules)
+      if (!password) {
+        newUnlocked.set(capsuleId, content)
+      } else if (unlockedCapsules.has(capsuleId)) {
+        newUnlocked.set(capsuleId, content)
+      }
+      
+      set({ 
+        capsules: updatedCapsules,
+        unlockedCapsules: newUnlocked
+      })
       
       console.log('✅ Capsule content updated:', capsuleId)
     } catch (error: any) {
@@ -264,7 +407,6 @@ export const useCapsuleStore = create<SecureCapsuleStore>((set, get) => ({
   // Fetch dashboard statistics
   fetchDashboardStats: async () => {
     try {
-      // Use basic CapsuleService for stats since SecureCapsuleService doesn't have it
       const { CapsuleService } = await import('@/lib/capsules')
       const stats = await CapsuleService.getDashboardStats()
       set({ dashboardStats: stats })
@@ -278,22 +420,35 @@ export const useCapsuleStore = create<SecureCapsuleStore>((set, get) => ({
   clearError: () => set({ error: null }),
 
   // Set loading state
-  setLoading: (loading: boolean) => set({ isLoading: loading })
+  setLoading: (loading: boolean) => set({ isLoading: loading }),
+
+  // Clear all unlocked data (for security)
+  clearUnlockedData: () => {
+    set({ unlockedCapsules: new Map() })
+    console.log('🧹 Cleared all unlocked capsule data')
+  }
 }))
 
-// Export helper hooks for common operations
+// Enhanced helper hooks
 export const useSecureCapsule = (capsuleId: string) => {
   const store = useCapsuleStore()
   const capsule = store.capsules.find(c => c.id === capsuleId)
+  const isUnlocked = store.isUnlocked(capsuleId)
+  const unlockedContent = store.unlockedCapsules.get(capsuleId)
   
   return {
     capsule,
     isEncrypted: capsule?.isEncrypted || false,
     isPasswordProtected: capsule?.security.passwordProtected || false,
+    isUnlocked,
+    unlockedContent,
     getCapsule: (password?: string) => store.getCapsule(capsuleId, password),
+    unlockCapsule: (password: string) => store.unlockCapsule(capsuleId, password),
+    lockCapsule: () => store.lockCapsule(capsuleId),
     verifyPassword: (password: string) => store.verifyPassword(capsuleId, password),
     addPasswordProtection: (password: string) => store.addPasswordProtection(capsuleId, password),
     removePasswordProtection: (password: string) => store.removePasswordProtection(capsuleId, password),
+    changePassword: (oldPassword: string, newPassword: string) => store.changePassword(capsuleId, oldPassword, newPassword),
     updateContent: (content: any, password?: string) => store.updateCapsuleContent(capsuleId, content, password)
   }
 }
@@ -306,9 +461,10 @@ export const useEncryptedCapsules = () => {
     encryptedCapsules: store.capsules.filter(c => c.isEncrypted),
     unencryptedCapsules: store.capsules.filter(c => !c.isEncrypted),
     passwordProtectedCapsules: store.capsules.filter(c => c.security.passwordProtected),
+    unlockedCapsules: Array.from(store.unlockedCapsules.keys()),
     createEncryptedCapsule: (capsuleData: any, password: string) => 
       store.createCapsule(capsuleData, password),
     createUnencryptedCapsule: (capsuleData: any) => 
-      store.createCapsule(capsuleData)
-  }
-}
+      store.createCapsule(capsuleData),
+    clearAllUnlocked: () => store.clearUnlockedData()
+  }}

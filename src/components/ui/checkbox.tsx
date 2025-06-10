@@ -1,5 +1,4 @@
-
-// 📁 src/components/ui/checkbox.tsx (if missing)
+// 📁 src/components/ui/checkbox.tsx (FIXED VERSION)
 import * as React from "react"
 import * as CheckboxPrimitive from "@radix-ui/react-checkbox"
 import { Check } from "lucide-react"
