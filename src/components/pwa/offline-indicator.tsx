@@ -1,5 +1,4 @@
-
-// 📁 src/components/pwa/offline-indicator.tsx
+// 📁 src/components/pwa/offline-indicator.tsx (FIXED - Client-side checks)
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -10,32 +9,45 @@ import { motion, AnimatePresence } from 'framer-motion'
 export function OfflineIndicator() {
   const [isOnline, setIsOnline] = useState(true)
   const [showIndicator, setShowIndicator] = useState(false)
+  const [isClient, setIsClient] = useState(false) // FIXED: Add client-side flag
 
   useEffect(() => {
+    // FIXED: Set client-side flag first
+    setIsClient(true)
+    
     const updateOnlineStatus = () => {
-      const online = navigator.onLine
-      setIsOnline(online)
-      
-      if (!online) {
-        setShowIndicator(true)
-      } else {
-        // Hide indicator after a brief "back online" message
-        setTimeout(() => setShowIndicator(false), 3000)
+      if (typeof navigator !== 'undefined') {
+        const online = navigator.onLine
+        setIsOnline(online)
+        
+        if (!online) {
+          setShowIndicator(true)
+        } else {
+          // Hide indicator after a brief "back online" message
+          setTimeout(() => setShowIndicator(false), 3000)
+        }
       }
     }
 
-    // Set initial status
-    updateOnlineStatus()
+    // Set initial status only on client side
+    if (typeof navigator !== 'undefined') {
+      updateOnlineStatus()
 
-    // Listen for online/offline events
-    window.addEventListener('online', updateOnlineStatus)
-    window.addEventListener('offline', updateOnlineStatus)
+      // Listen for online/offline events
+      window.addEventListener('online', updateOnlineStatus)
+      window.addEventListener('offline', updateOnlineStatus)
 
-    return () => {
-      window.removeEventListener('online', updateOnlineStatus)
-      window.removeEventListener('offline', updateOnlineStatus)
+      return () => {
+        window.removeEventListener('online', updateOnlineStatus)
+        window.removeEventListener('offline', updateOnlineStatus)
+      }
     }
   }, [])
+
+  // FIXED: Don't render anything on server side
+  if (!isClient) {
+    return null
+  }
 
   return (
     <AnimatePresence>

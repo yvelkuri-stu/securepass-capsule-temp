@@ -1,3 +1,5 @@
+
+// 📁 src/components/dashboard/header.tsx
 'use client'
 
 import React from 'react' // Import React
@@ -10,7 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuLabel,
-} from '@/components/ui/dropdown-menu' // Assuming this is the correct path for your dropdown components
+} from '@/components/ui/dropdown-menu'
 import {
   Bell,
   Settings,
@@ -28,24 +30,21 @@ import {
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/hooks/useAuth' // Assuming useAuth is in this path
-import { toast } from 'sonner' // Assuming sonner is installed for toasts
-
-// You might need a utility for combining class names, e.g., 'clsx' or 'tailwind-merge'
-// If you have a 'cn' utility, make sure it's imported or defined.
-// For example:
-// import { cn } from '@/lib/utils'; // Or wherever your cn utility is
+import { useAuth } from '@/hooks/useAuth'
+import { toast } from 'sonner'
 
 export function Header() {
   const router = useRouter()
-  const { user, signOut } = useAuth()
+  // CHANGE: Destructure 'logout' instead of 'signOut'
+  const { user, logout } = useAuth()
   const { setTheme } = useTheme()
 
   const handleSignOut = async () => {
     try {
-      await signOut()
+      // CHANGE: Call 'logout' instead of 'signOut'
+      await logout()
       toast.success('Logged out successfully!')
-      router.push('/auth/signin') // Redirect to sign-in page after logout
+      router.push('/auth/signin')
     } catch (error: any) {
       console.error('Logout failed:', error)
       toast.error(`Logout failed: ${error.message}`)
@@ -76,7 +75,7 @@ export function Header() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-9 w-9 rounded-full">
                 <Avatar className="h-9 w-9">
-                  <AvatarImage src={user?.imageUrl || '/avatars/01.png'} alt="@shadcn" />
+                  <AvatarImage src={user?.profilePicture || '/avatars/01.png'} alt="@shadcn" />
                   <AvatarFallback>
                     {user?.email ? user.email.charAt(0).toUpperCase() : 'SC'}
                   </AvatarFallback>
@@ -86,7 +85,7 @@ export function Header() {
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">{user?.name || 'User'}</p>
+                  <p className="text-sm font-medium leading-none">{user?.displayName || 'User'}</p>
                   <p className="text-xs leading-none text-muted-foreground">
                     {user?.email || 'user@example.com'}
                   </p>

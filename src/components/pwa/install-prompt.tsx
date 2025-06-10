@@ -1,4 +1,4 @@
-// 📁 src/components/pwa/install-prompt.tsx
+// 📁 src/components/pwa/install-prompt.tsx (FIXED - Client-side checks)
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -17,22 +17,28 @@ export function PWAInstallPrompt() {
   const [showPrompt, setShowPrompt] = useState(false)
   const [isInstalled, setIsInstalled] = useState(false)
   const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop' | null>(null)
+  const [isClient, setIsClient] = useState(false) // FIXED: Add client-side flag
 
   useEffect(() => {
+    // FIXED: Set client-side flag first
+    setIsClient(true)
+    
     // Check if already installed
-    if (window.matchMedia('(display-mode: standalone)').matches) {
+    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
       setIsInstalled(true)
       return
     }
 
     // Detect platform
-    const userAgent = navigator.userAgent.toLowerCase()
-    if (/iphone|ipad|ipod/.test(userAgent)) {
-      setPlatform('ios')
-    } else if (/android/.test(userAgent)) {
-      setPlatform('android')
-    } else {
-      setPlatform('desktop')
+    if (typeof navigator !== 'undefined') {
+      const userAgent = navigator.userAgent.toLowerCase()
+      if (/iphone|ipad|ipod/.test(userAgent)) {
+        setPlatform('ios')
+      } else if (/android/.test(userAgent)) {
+        setPlatform('android')
+      } else {
+        setPlatform('desktop')
+      }
     }
 
     // Listen for beforeinstallprompt event
@@ -53,12 +59,14 @@ export function PWAInstallPrompt() {
       setDeferredPrompt(null)
     }
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
-    window.addEventListener('appinstalled', handleAppInstalled)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+      window.addEventListener('appinstalled', handleAppInstalled)
 
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
-      window.removeEventListener('appinstalled', handleAppInstalled)
+      return () => {
+        window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+        window.removeEventListener('appinstalled', handleAppInstalled)
+      }
     }
   }, [])
 
@@ -84,12 +92,24 @@ export function PWAInstallPrompt() {
 
   const handleDismiss = () => {
     setShowPrompt(false)
-    // Don't show again for this session
-    sessionStorage.setItem('pwa-install-dismissed', 'true')
+    // FIXED: Add client-side check before accessing sessionStorage
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      sessionStorage.setItem('pwa-install-dismissed', 'true')
+    }
   }
 
+  // FIXED: Early return if not on client side
+  if (!isClient) {
+    return null
+  }
+
+  // FIXED: Add client-side check for sessionStorage
+  const isDismissed = typeof window !== 'undefined' && window.sessionStorage 
+    ? sessionStorage.getItem('pwa-install-dismissed') 
+    : false
+
   // Don't show if already installed or user dismissed
-  if (isInstalled || sessionStorage.getItem('pwa-install-dismissed')) {
+  if (isInstalled || isDismissed) {
     return null
   }
 

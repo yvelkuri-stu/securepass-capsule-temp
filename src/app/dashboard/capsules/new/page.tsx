@@ -1,9 +1,10 @@
-// 📁 src/app/dashboard/capsules/new/page.tsx (ENHANCED VERSION)
+// 📁 src/app/dashboard/capsules/new/page.tsx (FIXED - Next.js Image)
 'use client'
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image' // FIXED: Added Next.js Image import
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,7 +17,7 @@ import { Progress } from '@/components/ui/progress'
 import { 
   ArrowLeft,
   FileText,
-  Image,
+  Image as ImageIcon,
   Video,
   Paperclip,
   QrCode,
@@ -41,7 +42,7 @@ import { toast } from 'sonner'
 
 const dataTypes: { id: DataType; label: string; icon: any; description: string }[] = [
   { id: 'text', label: 'Text Content', icon: FileText, description: 'Secure notes and text documents' },
-  { id: 'images', label: 'Images', icon: Image, description: 'Photos and image files' },
+  { id: 'images', label: 'Images', icon: ImageIcon, description: 'Photos and image files' },
   { id: 'videos', label: 'Videos', icon: Video, description: 'Video files and recordings' },
   { id: 'attachments', label: 'File Attachments', icon: Paperclip, description: 'Documents and other files' },
   { id: 'qrCodes', label: 'QR Codes', icon: QrCode, description: 'QR code data and links' },
@@ -458,7 +459,13 @@ export default function EnhancedNewCapsulePage() {
                       {uploadedFiles.map((fileItem) => (
                         <div key={fileItem.id} className="flex items-center space-x-2 p-2 border rounded">
                           {fileItem.preview ? (
-                            <img src={fileItem.preview} alt="" className="w-8 h-8 object-cover rounded" />
+                            <Image 
+                              src={fileItem.preview} 
+                              alt={fileItem.file.name}
+                              width={32}
+                              height={32}
+                              className="object-cover rounded"
+                            />
                           ) : (
                             <FileText className="h-8 w-8 text-muted-foreground" />
                           )}

@@ -192,3 +192,116 @@ insert into public.capsules (
   '{"encryptionEnabled": true, "passwordProtected": true, "biometricLock": false, "accessLogging": true}'
 );
 */
+
+-- 📁 Supabase Storage Setup (Run in SQL Editor)
+
+-- Create storage bucket for capsule files
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'capsule-files',
+  'capsule-files',
+  false, -- Private bucket
+  52428800, -- 50MB limit per file
+  array[
+    'image/jpeg',
+    'image/png', 
+    'image/gif',
+    'image/webp',
+    'video/mp4',
+    'video/webm',
+    'application/pdf',
+    'text/plain',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  ]
+);
+
+-- Storage policies for capsule files
+create policy "Users can upload files to their own folders"
+on storage.objects for insert
+with check (
+  bucket_id = 'capsule-files' and
+  auth.uid()::text = (storage.foldername(name))[1]
+);
+
+create policy "Users can view their own files"
+on storage.objects for select
+using (
+  bucket_id = 'capsule-files' and
+  auth.uid()::text = (storage.foldername(name))[1]
+);
+
+create policy "Users can update their own files"
+on storage.objects for update
+using (
+  bucket_id = 'capsule-files' and
+  auth.uid()::text = (storage.foldername(name))[1]
+);
+
+create policy "Users can delete their own files"
+on storage.objects for delete
+using (
+  bucket_id = 'capsule-files' and
+  auth.uid()::text = (storage.foldername(name))[1]
+);
+
+-- Add file_attachments table for metadata
+create table public.file_attachments (
+  id uuid default uuid_generate_v4() primary key,
+  capsule_id uuid references public.capsules(id) on delete cascade not null,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  file_name text not null,
+  file_size bigint not null,
+  file_type text not null,
+  storage_path text not null,
+  thumbnail_path text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- RLS for file_attachments
+alter table public.file_attachments enable row level security;
+
+create policy "Users can view own file attachments"
+on public.file_attachments for select
+using (auth.uid() = user_id);
+
+create policy "Users can insert own file attachments"
+on public.file_attachments for insert
+with check (auth.uid() = user_id);
+
+create policy "Users can update own file attachments"
+on public.file_attachments for update
+using (auth.uid() = user_id);
+
+create policy "Users can delete own file attachments"
+on public.file_attachments for delete
+using (auth.uid() = user_id);
+
+-- Indexes
+create index idx_file_attachments_capsule_id on public.file_attachments(capsule_id);
+create index idx_file_attachments_user_id on public.file_attachments(user_id);
+
+-- Trigger for updated_at
+create trigger handle_file_attachments_updated_at before update on public.file_attachments
+  for each row execute procedure public.handle_updated_at();
+
+  --For encryption purpose
+  -- Update all existing capsules to have proper security metadata
+UPDATE capsules 
+SET 
+  metadata = jsonb_set(
+    COALESCE(metadata, '{}'), 
+    '{isEncrypted}', 
+    'false'
+  ),
+  security = jsonb_set(
+    COALESCE(security, '{}'), 
+    '{passwordProtected}', 
+    'false'
+  )
+WHERE 
+  metadata->>'isEncrypted' IS NULL 
+  OR security->>'passwordProtected' IS NULL;

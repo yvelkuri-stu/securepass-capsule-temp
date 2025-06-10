@@ -1,5 +1,4 @@
-
-// 📁 src/hooks/usePWA.ts
+// 📁 src/hooks/usePWA.ts (FIXED - Client-side checks)
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -16,15 +15,24 @@ export function usePWA(): PWAHook {
   const [isInstalled, setIsInstalled] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
+  const [isClient, setIsClient] = useState(false) // FIXED: Add client-side flag
 
   useEffect(() => {
+    // FIXED: Set client-side flag first
+    setIsClient(true)
+
+    // Only run on client side
+    if (typeof window === 'undefined') return
+
     // Check if app is installed
-    if (window.matchMedia('(display-mode: standalone)').matches) {
+    if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
       setIsInstalled(true)
     }
 
     // Set initial online status
-    setIsOnline(navigator.onLine)
+    if (navigator.onLine !== undefined) {
+      setIsOnline(navigator.onLine)
+    }
 
     // Listen for online/offline events
     const handleOnline = () => setIsOnline(true)
@@ -56,7 +64,7 @@ export function usePWA(): PWAHook {
     }
   }, [])
 
-  const installPrompt = deferredPrompt ? async () => {
+  const installPrompt = deferredPrompt && isClient ? async () => {
     try {
       await deferredPrompt.prompt()
       const choiceResult = await deferredPrompt.userChoice
@@ -71,7 +79,7 @@ export function usePWA(): PWAHook {
   return {
     isInstalled,
     isOnline,
-    canInstall: !!deferredPrompt,
+    canInstall: !!deferredPrompt && isClient,
     installPrompt,
     deferredPrompt
   }

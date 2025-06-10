@@ -1,7 +1,8 @@
-// 📁 src/components/file-upload/enhanced-file-grid.tsx
+// 📁 src/components/file-upload/enhanced-file-grid.tsx (FIXED - Next.js Image)
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image' // FIXED: Added Next.js Image import
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -284,22 +285,23 @@ export function EnhancedFileGrid({
                   <CardContent className="p-4">
                     <div className="aspect-square relative mb-3">
                       {file.fileType.startsWith('image/') ? (
-                        <img
+                        <Image
                           src={file.url}
                           alt={file.fileName}
-                          className="w-full h-full object-cover rounded-md"
+                          fill
+                          className="object-cover rounded-md cursor-pointer"
                           onClick={() => onFileView(file)}
                         />
                       ) : file.fileType.startsWith('video/') ? (
                         <video
                           src={file.url}
-                          className="w-full h-full object-cover rounded-md"
+                          className="w-full h-full object-cover rounded-md cursor-pointer"
                           onClick={() => onFileView(file)}
                           preload="metadata"
                         />
                       ) : (
                         <div
-                          className="w-full h-full bg-muted rounded-md flex items-center justify-center"
+                          className="w-full h-full bg-muted rounded-md flex items-center justify-center cursor-pointer"
                           onClick={() => onFileView(file)}
                         >
                           <div className="text-center">

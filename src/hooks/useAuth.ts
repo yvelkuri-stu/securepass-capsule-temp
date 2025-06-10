@@ -1,16 +1,16 @@
-// 📁 src/hooks/useAuth.ts (Fixed with proper redirect)
+// 📁 src/hooks/useAuth.ts (FIXED - Proper dependencies)
 import { useAuthStore } from '@/store/auth'
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useCallback } from 'react'
 
 export function useAuth() {
   const auth = useAuthStore()
   const router = useRouter()
 
-  // Initialize auth on mount
+  // Initialize auth on mount - FIXED: Added auth to dependencies
   useEffect(() => {
     auth.initialize()
-  }, [])
+  }, [auth.initialize]) // FIXED: Only depend on the initialize function
 
   // Auto-redirect after successful authentication
   useEffect(() => {
@@ -23,17 +23,17 @@ export function useAuth() {
     }
   }, [auth.isAuthenticated, auth.isLoading, router])
 
-  const requireAuth = () => {
+  const requireAuth = useCallback(() => {
     if (!auth.isAuthenticated && !auth.isLoading) {
       router.push('/auth/login')
     }
-  }
+  }, [auth.isAuthenticated, auth.isLoading, router])
 
-  const redirectIfAuthenticated = () => {
+  const redirectIfAuthenticated = useCallback(() => {
     if (auth.isAuthenticated && !auth.isLoading) {
       router.push('/dashboard')
     }
-  }
+  }, [auth.isAuthenticated, auth.isLoading, router])
 
   return {
     ...auth,

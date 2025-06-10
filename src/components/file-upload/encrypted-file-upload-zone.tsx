@@ -1,5 +1,4 @@
 // 📁 src/components/file-upload/encrypted-file-upload-zone.tsx
-'use client'
 
 import { useState, useCallback } from 'react'
 import { useDropzone, FileRejection } from 'react-dropzone'
@@ -10,12 +9,13 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { 
-  Upload, 
-  Lock, 
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Upload,
+  Lock,
   Unlock,
-  Shield, 
-  Eye, 
+  Shield,
+  Eye,
   EyeOff,
   CheckCircle,
   AlertTriangle,
@@ -69,27 +69,9 @@ export function EncryptedFileUploadZone({
     toast.success('Secure password generated!')
   }
 
-  const onDrop = useCallback(async (acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
-    if (rejectedFiles?.length > 0) {
-      setRejectedFiles(rejectedFiles)
-      setTimeout(() => setRejectedFiles([]), 5000)
-    }
-
-    if (acceptedFiles.length === 0) return
-
-    // If encryption is enabled but no password is set, show dialog
-    if (encryptionEnabled && !password) {
-      setPendingFiles(acceptedFiles)
-      setShowPasswordDialog(true)
-      return
-    }
-
-    await processFiles(acceptedFiles)
-  }, [encryptionEnabled, password])
-
-  const processFiles = async (files: File[]) => {
+  const processFiles = useCallback(async (files: File[]) => { // Added useCallback here for consistency
     const newUploadingFiles = new Map<string, UploadingFile>()
-    
+
     files.forEach(file => {
       newUploadingFiles.set(file.name, {
         name: file.name,
@@ -98,7 +80,7 @@ export function EncryptedFileUploadZone({
         status: 'uploading'
       })
     })
-    
+
     setUploadingFiles(newUploadingFiles)
 
     for (const file of files) {
@@ -129,7 +111,7 @@ export function EncryptedFileUploadZone({
           fileToUpload = new File([encryptionResult.encryptedFile], `${file.name}.encrypted`, {
             type: 'application/octet-stream'
           })
-          
+
           isEncrypted = true
           encryptionMetadata = encryptionResult.metadata
         }
@@ -172,12 +154,12 @@ export function EncryptedFileUploadZone({
 
       } catch (error: any) {
         console.error('Upload error:', error)
-        
+
         setUploadingFiles(prev => new Map(prev.set(file.name, {
           ...prev.get(file.name)!,
           status: 'error'
         })))
-        
+
         toast.error(`Failed to upload ${file.name}: ${error.message}`)
       }
     }
@@ -186,10 +168,30 @@ export function EncryptedFileUploadZone({
     setTimeout(() => {
       setUploadingFiles(new Map())
     }, 3000)
-  }
+  }, [capsuleId, encryptionEnabled, password, onFileUploaded]); // Added dependencies for useCallback
+
+  const onDrop = useCallback(async (acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
+    if (rejectedFiles?.length > 0) {
+      setRejectedFiles(rejectedFiles)
+      setTimeout(() => setRejectedFiles([]), 5000)
+    }
+
+    if (acceptedFiles.length === 0) return
+
+    // If encryption is enabled but no password is set, show dialog
+    if (encryptionEnabled && !password) {
+      setPendingFiles(acceptedFiles)
+      setShowPasswordDialog(true)
+      return
+    }
+
+    await processFiles(acceptedFiles)
+  }, [encryptionEnabled, password, processFiles])
 
   const handlePasswordDialogConfirm = async () => {
-    if (!password && encryptionEnabled) {
+    // If autoGenerate is true, a password should have been set by the button's onClick
+    // Otherwise, ensure password is not empty if autoGenerate is false
+    if (!autoGenerate && !password && encryptionEnabled) {
       toast.error('Please enter a password for encryption')
       return
     }
@@ -248,14 +250,21 @@ export function EncryptedFileUploadZone({
                 onCheckedChange={setEncryptionEnabled}
               />
             </div>
-            
+
             {encryptionEnabled && (
               <div className="space-y-3">
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="auto-generate"
                     checked={autoGenerate}
-                    onCheckedChange={setAutoGenerate}
+                    // FIX: Wrap setAutoGenerate in an anonymous function
+                    onCheckedChange={(checkedState) => {
+                        // checkedState can be boolean or "indeterminate"
+                        // We only care about boolean for this state
+                        if (typeof checkedState === 'boolean') {
+                            setAutoGenerate(checkedState);
+                        }
+                    }}
                   />
                   <Label htmlFor="auto-generate" className="text-sm">
                     Auto-generate secure password
@@ -295,7 +304,7 @@ export function EncryptedFileUploadZone({
                         </Button>
                       </div>
                     </div>
-                    
+
                     {passwordStrength && (
                       <div className="space-y-1">
                         <div className="flex items-center justify-between text-xs">
@@ -320,7 +329,7 @@ export function EncryptedFileUploadZone({
                 <div className="flex items-start space-x-2 p-2 bg-blue-50 rounded text-xs text-blue-700">
                   <Info className="h-3 w-3 mt-0.5" />
                   <div>
-                    Files are encrypted in your browser before upload. 
+                    Files are encrypted in your browser before upload.
                     {autoGenerate ? ' A secure password will be generated automatically.' : ' Store your password safely - it cannot be recovered if lost.'}
                   </div>
                 </div>
@@ -338,7 +347,7 @@ export function EncryptedFileUploadZone({
             } ${uploadingFiles.size > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <input {...getInputProps()} />
-            
+
             <div className="space-y-4">
               <div className="mx-auto w-12 h-12 bg-muted rounded-full flex items-center justify-center">
                 {encryptionEnabled ? (
@@ -347,7 +356,7 @@ export function EncryptedFileUploadZone({
                   <Upload className="h-6 w-6 text-muted-foreground" />
                 )}
               </div>
-              
+
               <div>
                 <p className="text-sm font-medium">
                   {isDragActive ? 'Drop files here' : 'Drag & drop files here'}
@@ -427,13 +436,18 @@ export function EncryptedFileUploadZone({
               Enter a password to encrypt your files before upload. This ensures your data remains secure.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="dialog-auto-generate"
                 checked={autoGenerate}
-                onCheckedChange={setAutoGenerate}
+                // FIX: Apply the same fix here
+                onCheckedChange={(checkedState) => {
+                    if (typeof checkedState === 'boolean') {
+                        setAutoGenerate(checkedState);
+                    }
+                }}
               />
               <Label htmlFor="dialog-auto-generate" className="text-sm">
                 Auto-generate secure password (recommended)
@@ -462,7 +476,7 @@ export function EncryptedFileUploadZone({
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </div>
-                
+
                 {passwordStrength && (
                   <div className="space-y-1">
                     <div className="flex items-center justify-between text-xs">
@@ -483,7 +497,7 @@ export function EncryptedFileUploadZone({
               <div className="flex items-start space-x-2">
                 <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5" />
                 <div className="text-xs text-amber-700">
-                  <strong>Important:</strong> {autoGenerate 
+                  <strong>Important:</strong> {autoGenerate
                     ? 'The generated password will be shown once. Make sure to save it securely.'
                     : 'Store this password safely. If lost, your encrypted files cannot be recovered.'
                   }
@@ -504,14 +518,14 @@ export function EncryptedFileUploadZone({
                   if (autoGenerate) {
                     const newPassword = EnhancedCryptoService.generateSecurePassword(24)
                     setPassword(newPassword)
-                    
+
                     // Show the generated password to user
                     toast.success(`Generated password: ${newPassword}`, {
                       duration: 10000,
                       description: 'Save this password securely!'
                     })
                   }
-                  
+
                   handlePasswordDialogConfirm()
                 }}
                 disabled={!autoGenerate && (!password || !passwordStrength?.isStrong)}
@@ -526,4 +540,3 @@ export function EncryptedFileUploadZone({
     </>
   )
 }
-

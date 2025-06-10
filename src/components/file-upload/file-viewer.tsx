@@ -1,8 +1,8 @@
-
-// 📁 src/components/file-upload/file-viewer.tsx (Modal file viewer)
+// 📁 src/components/file-upload/file-viewer.tsx (FIXED - Next.js Image)
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image' // FIXED: Added Next.js Image import
 import {
   Dialog,
   DialogContent,
@@ -39,12 +39,16 @@ export function FileViewer({ file, isOpen, onClose }: FileViewerProps) {
       return (
         <div className="relative">
           {!imageError ? (
-            <img
-              src={file.url}
-              alt={file.fileName}
-              className="max-w-full max-h-[70vh] mx-auto rounded-lg"
-              onError={() => setImageError(true)}
-            />
+            <div className="relative w-full max-h-[70vh] mx-auto">
+              <Image
+                src={file.url}
+                alt={file.fileName}
+                width={800}
+                height={600}
+                className="max-w-full max-h-[70vh] object-contain mx-auto rounded-lg"
+                onError={() => setImageError(true)}
+              />
+            </div>
           ) : (
             <div className="flex items-center justify-center h-64 bg-muted rounded-lg">
               <p className="text-muted-foreground">Failed to load image</p>

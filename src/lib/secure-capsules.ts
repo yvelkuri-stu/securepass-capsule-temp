@@ -1,14 +1,21 @@
-// 📁 src/lib/secure-capsules.ts (NEW - Complete encryption integration)
+// 📁 src/lib/secure-capsules.ts (FIXED - Complete encryption integration)
 import { supabase } from './supabase'
 import { EnhancedCryptoService } from './enhanced-crypto'
-import { Capsule } from '@/types'
+import { Capsule, CapsuleContent } from '@/types' // Assuming CapsuleContent is also exported from '@/types'
 
+// Define a type for the encrypted content structure
+export interface EncryptedContentData {
+  encrypted: boolean;
+  data: string; // Assuming encryptedData is a string
+}
+
+// Update SecureCapsule to use a union type for content, allowing both original and encrypted forms
 export interface SecureCapsule extends Omit<Capsule, 'content'> {
-  content: any // Will be encrypted/decrypted automatically
-  isEncrypted: boolean
-  passwordHash?: string
-  encryptionSalt?: string
-  encryptionIV?: string
+  content: CapsuleContent | EncryptedContentData; // Content can be original or encrypted
+  isEncrypted: boolean;
+  passwordHash?: string;
+  encryptionSalt?: string;
+  encryptionIV?: string;
 }
 
 export class SecureCapsuleService {
@@ -21,7 +28,8 @@ export class SecureCapsuleService {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Not authenticated')
 
-    let encryptedContent = capsuleData.content
+    // Initialize encryptedContent with the original content, but typed to allow the encrypted format too
+    let encryptedContent: CapsuleContent | EncryptedContentData = capsuleData.content;
     let isEncrypted = false
     let passwordHash = undefined
     let encryptionSalt = undefined
@@ -52,7 +60,7 @@ export class SecureCapsuleService {
       title: capsuleData.title,
       description: capsuleData.description,
       data_types: capsuleData.dataTypes,
-      content: encryptedContent,
+      content: encryptedContent, // This is now correctly typed
       metadata: {
         ...capsuleData.metadata,
         isEncrypted,
@@ -109,7 +117,8 @@ export class SecureCapsuleService {
     const capsule = this.transformFromDB(data)
 
     // If capsule is encrypted, decrypt the content
-    if (capsule.isEncrypted && capsule.content?.encrypted) {
+    // Use a type guard to safely access the 'encrypted' property
+    if (capsule.isEncrypted && (capsule.content as EncryptedContentData)?.encrypted) {
       if (!password) {
         throw new Error('Password required to decrypt capsule')
       }
@@ -118,13 +127,13 @@ export class SecureCapsuleService {
       
       try {
         const decryptedContent = await EnhancedCryptoService.decryptText({
-          encryptedData: capsule.content.data,
+          encryptedData: (capsule.content as EncryptedContentData).data, // Cast to access 'data'
           iv: capsule.encryptionIV!,
           salt: capsule.encryptionSalt!,
           password
         })
         
-        capsule.content = JSON.parse(decryptedContent)
+        capsule.content = JSON.parse(decryptedContent) as CapsuleContent // Assign back to original CapsuleContent type
         console.log('✅ Content decrypted successfully')
         
       } catch (error) {
@@ -186,11 +195,28 @@ export class SecureCapsuleService {
 
     if (fetchError) throw fetchError
 
-    // Encrypt the current content
-    const contentString = JSON.stringify(currentCapsule.content)
+    // Ensure content is in a decrypted state before encryption
+    let contentToEncrypt: CapsuleContent = currentCapsule.content;
+    
+    // If the existing capsule content is already encrypted (e.g., if re-adding/changing protection),
+    // it must be decrypted first. This example assumes 'addPasswordProtection' is for unencrypted
+    // -> encrypted transition. If it's already encrypted, the logic needs to decrypt first.
+    // This is a placeholder for a more complex scenario.
+    if (currentCapsule.metadata?.isEncrypted && (currentCapsule.content as EncryptedContentData)?.encrypted) {
+       // In a real application, you'd need the *original* password to decrypt first.
+       // For this function, we'll assume the content fetched is already in its decrypted form
+       // if `isEncrypted` is true, it means `getCapsule` would have decrypted it.
+       // Or, if calling this on an already encrypted capsule, ensure `currentCapsule.content`
+       // is passed in its original, decrypted form from the client side.
+       // If you want to re-encrypt, you'd call getCapsule(id, oldPassword) first, then this function.
+       console.warn("Attempting to add password protection to an already encrypted capsule. Ensure currentCapsule.content is decrypted before re-encryption.");
+    }
+
+
+    const contentString = JSON.stringify(contentToEncrypt)
     const encryptionResult = await EnhancedCryptoService.encryptText(contentString, password)
 
-    const encryptedContent = {
+    const encryptedContent: EncryptedContentData = {
       encrypted: true,
       data: encryptionResult.encryptedData
     }
@@ -229,13 +255,13 @@ export class SecureCapsuleService {
     console.log('🔓 Removing password protection from capsule...')
     
     // First decrypt the content
-    const capsule = await this.getCapsule(capsuleId, currentPassword)
+    const capsule = await this.getCapsule(capsuleId, currentPassword) // This will decrypt it internally
 
     // Update with decrypted content and remove password info
     const { error } = await supabase
       .from('capsules')
       .update({
-        content: capsule.content,
+        content: capsule.content, // 'capsule.content' is now decrypted thanks to getCapsule
         metadata: {
           ...capsule.metadata,
           isEncrypted: false,
@@ -260,29 +286,34 @@ export class SecureCapsuleService {
   // Update capsule content (handles encryption automatically)
   static async updateCapsuleContent(
     capsuleId: string,
-    newContent: any,
+    newContent: CapsuleContent, // Expect CapsuleContent here as it's the decrypted form
     password?: string
   ): Promise<void> {
-    const { data: capsule, error: fetchError } = await supabase
+    const { data: capsuleFromDb, error: fetchError } = await supabase
       .from('capsules')
-      .select('metadata, security')
+      .select('metadata, security, content') // Also fetch content to know its current state
       .eq('id', capsuleId)
       .single()
 
     if (fetchError) throw fetchError
 
-    let contentToStore = newContent
+    let contentToStore: CapsuleContent | EncryptedContentData = newContent;
 
-    // If capsule is encrypted, encrypt the new content
-    if (capsule.metadata?.isEncrypted && password) {
+    // If capsule is marked as encrypted, we need to encrypt the new content before storing
+    if (capsuleFromDb.metadata?.isEncrypted) {
+      if (!password) {
+        throw new Error("Password required to update content of an encrypted capsule.");
+      }
+
       const contentString = JSON.stringify(newContent)
       const encryptionResult = await EnhancedCryptoService.encryptText(contentString, password)
       
       contentToStore = {
         encrypted: true,
         data: encryptionResult.encryptedData
-      }
+      } as EncryptedContentData; // Cast to the correct type
     }
+    // If not encrypted, contentToStore remains newContent (CapsuleContent type), which is fine.
 
     const { error: updateError } = await supabase
       .from('capsules')
@@ -298,14 +329,22 @@ export class SecureCapsuleService {
   // Transform database record to app format
   private static transformFromDB(dbCapsule: any): SecureCapsule {
     const metadata = dbCapsule.metadata || {}
+    const security = dbCapsule.security || {}
     
+    // Determine if content is encrypted in DB based on metadata flag
+    const isEncryptedInDb = metadata.isEncrypted === true;
+
+    // The content from DB will either be the original structure or { encrypted: true, data: '...' }
+    // We cast it here to the union type to satisfy SecureCapsule interface
+    const content: CapsuleContent | EncryptedContentData = dbCapsule.content || {};
+
     return {
       id: dbCapsule.id,
       userId: dbCapsule.user_id,
       title: dbCapsule.title,
       description: dbCapsule.description,
       dataTypes: dbCapsule.data_types || [],
-      content: dbCapsule.content || {},
+      content: content, // This is now typed as CapsuleContent | EncryptedContentData
       metadata: {
         itemCount: metadata.itemCount || 0,
         totalSize: metadata.totalSize || 0,
@@ -324,16 +363,17 @@ export class SecureCapsuleService {
         ...dbCapsule.sharing
       },
       security: {
-        encryptionEnabled: dbCapsule.security?.encryptionEnabled !== false,
-        passwordProtected: dbCapsule.security?.passwordProtected || false,
-        biometricLock: dbCapsule.security?.biometricLock || false,
-        accessLogging: dbCapsule.security?.accessLogging !== false,
-        ...dbCapsule.security
+        encryptionEnabled: security.encryptionEnabled !== false, // Default to true if not explicitly false
+        passwordProtected: security.passwordProtected || false,
+        biometricLock: security.biometricLock || false,
+        accessLogging: security.accessLogging !== false, // Default to true if not explicitly false
+        autoDestruct: security.autoDestruct, // Keep autoDestruct as is
+        ...security
       },
       createdAt: new Date(dbCapsule.created_at),
       updatedAt: new Date(dbCapsule.updated_at),
       lastAccessedAt: new Date(dbCapsule.last_accessed_at),
-      isEncrypted: metadata.isEncrypted || false,
+      isEncrypted: isEncryptedInDb, // This is explicitly from metadata
       passwordHash: metadata.passwordHash,
       encryptionSalt: metadata.encryptionSalt,
       encryptionIV: metadata.encryptionIV

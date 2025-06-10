@@ -1,4 +1,4 @@
-// 📁 src/components/file-upload/file-upload-zone.tsx (FIXED VERSION)
+// 📁 src/components/file-upload/file-upload-zone.tsx (FIXED - Added alt attribute)
 'use client'
 
 import { useState, useCallback } from 'react'

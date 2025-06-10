@@ -1,4 +1,4 @@
-// 📁 src/lib/storage.ts (File upload service)
+// 📁 src/lib/storage.ts (UPDATED with missing methods)
 import { supabase } from './supabase'
 
 export interface FileUploadResult {
@@ -103,6 +103,23 @@ export class StorageService {
       storagePath: filePath,
       thumbnailPath,
       url: urlData?.signedUrl || ''
+    }
+  }
+
+  // ADDED: Update file metadata (for encryption info)
+  static async updateFileMetadata(fileId: string, metadata: any): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('file_attachments')
+        .update(metadata)
+        .eq('id', fileId)
+
+      if (error) {
+        console.warn('Failed to update file metadata:', error)
+        // Don't throw - this is optional metadata
+      }
+    } catch (err) {
+      console.warn('File metadata update failed:', err)
     }
   }
 
