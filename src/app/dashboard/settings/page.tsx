@@ -1,4 +1,4 @@
-// 📁 src/app/dashboard/settings/page.tsx (Fixed date handling)
+// 📁 src/app/dashboard/settings/page.tsx (UPDATED to integrate 2FA)
 'use client'
 
 import { useState } from 'react'
@@ -23,10 +23,10 @@ import {
   Clock,
   AlertTriangle,
   CheckCircle,
-  QrCode,
   Download
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { TwoFactorSetup } from '@/components/security/two-factor-setup'
 import { toast } from 'sonner'
 import { formatDate } from '@/lib/utils'
 
@@ -48,21 +48,23 @@ export default function SettingsPage() {
     toast.success('Profile updated successfully')
   }
 
-  const handleMFAToggle = () => {
-    setSecuritySettings(prev => ({ ...prev, mfaEnabled: !prev.mfaEnabled }))
-    updateUser({ mfaEnabled: !securitySettings.mfaEnabled })
-    toast.success(securitySettings.mfaEnabled ? 'MFA disabled' : 'MFA enabled')
+  const handle2FAToggle = (enabled: boolean, backupCodes?: string[]) => {
+    setSecuritySettings(prev => ({ ...prev, mfaEnabled: enabled }))
+    updateUser({ mfaEnabled: enabled })
+    
+    if (enabled && backupCodes) {
+      // In a real app, you'd store backup codes securely
+      console.log('2FA Backup codes:', backupCodes)
+    }
   }
 
   const getInitials = (name: string) => {
     return name.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2)
   }
 
-  // Safe date formatting
   const formatUserDate = (date: Date | undefined) => {
     if (!date) return 'Not available'
     try {
-      // Ensure it's a proper Date object
       const dateObj = new Date(date)
       if (isNaN(dateObj.getTime())) return 'Invalid date'
       return formatDate(dateObj)
@@ -193,7 +195,13 @@ export default function SettingsPage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-2xl font-bold text-primary">{user?.securityScore || 85}%</span>
-                  <Badge variant="success">Excellent</Badge>
+                  <Badge variant={
+                    (user?.securityScore || 85) >= 90 ? 'default' : 
+                    (user?.securityScore || 85) >= 70 ? 'secondary' : 'destructive'
+                  }>
+                    {(user?.securityScore || 85) >= 90 ? 'Excellent' : 
+                     (user?.securityScore || 85) >= 70 ? 'Good' : 'Needs Improvement'}
+                  </Badge>
                 </div>
                 <Progress value={user?.securityScore || 85} className="h-3" />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
@@ -240,40 +248,14 @@ export default function SettingsPage() {
                 </div>
                 <Button variant="outline">Change</Button>
               </div>
-              
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div>
-                  <h4 className="font-medium">Two-Factor Authentication</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Add an extra layer of security to your account
-                  </p>
-                </div>
-                <Switch
-                  checked={securitySettings.mfaEnabled}
-                  onCheckedChange={handleMFAToggle}
-                />
-              </div>
-
-              {securitySettings.mfaEnabled && (
-                <div className="ml-4 space-y-2">
-                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <Smartphone className="h-4 w-4" />
-                      <span className="text-sm">Authenticator App</span>
-                    </div>
-                    <Badge variant="success">Active</Badge>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <Mail className="h-4 w-4" />
-                      <span className="text-sm">Email Backup</span>
-                    </div>
-                    <Button variant="outline" size="sm">Setup</Button>
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
+
+          {/* Two-Factor Authentication - NOW INTEGRATED */}
+          <TwoFactorSetup
+            isEnabled={securitySettings.mfaEnabled}
+            onToggle={handle2FAToggle}
+          />
 
           {/* Login History */}
           <Card>
@@ -294,7 +276,7 @@ export default function SettingsPage() {
                     <div>
                       <div className="flex items-center space-x-2">
                         <span className="font-medium">{login.location}</span>
-                        {login.current && <Badge variant="success" className="text-xs">Current</Badge>}
+                        {login.current && <Badge variant="default" className="text-xs">Current</Badge>}
                       </div>
                       <p className="text-sm text-muted-foreground">{login.device}</p>
                     </div>
@@ -419,6 +401,7 @@ export default function SettingsPage() {
                   Delete Account
                 </Button>
               </div>
+
             </CardContent>
           </Card>
         </TabsContent>
