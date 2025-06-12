@@ -138,3 +138,31 @@ export interface ActivityItem {
   timestamp: Date
   description: string
 }
+
+
+//From gemini start
+// src/types/service-worker.d.ts or src/types/global.d.ts
+// If this is a .ts file (not .d.ts), wrap global declarations in 'declare global'
+declare global {
+  interface SyncEvent extends Event {
+    readonly lastChance: boolean;
+    readonly tag: string;
+  }
+
+  // Declares the SyncManager class available globally
+  declare class SyncManager {
+    register(tag: string): Promise<void>;
+    getTags(): Promise<string[]>;
+  }
+
+  // Extends the ServiceWorkerRegistration interface to include the 'sync' property
+  interface ServiceWorkerRegistration {
+    readonly sync: SyncManager;
+  }
+
+  // Extends the Window interface to ensure ServiceWorkerRegistration is known on navigator
+  interface Window {
+    ServiceWorkerRegistration: ServiceWorkerRegistration;
+  }
+}
+//From gemini end

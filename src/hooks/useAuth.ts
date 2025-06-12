@@ -1,4 +1,4 @@
-// 📁 src/hooks/useAuth.ts (FIXED - Proper dependencies)
+// 📁 src/hooks/useAuth.ts (FIXED - Proper redirect logic)
 import { useAuthStore } from '@/store/auth'
 import { useRouter } from 'next/navigation'
 import { useEffect, useCallback } from 'react'
@@ -7,21 +7,34 @@ export function useAuth() {
   const auth = useAuthStore()
   const router = useRouter()
 
-  // Initialize auth on mount - FIXED: Added auth to dependencies
+  // Initialize auth on mount
   useEffect(() => {
-    auth.initialize()
-  }, [auth.initialize]) // FIXED: Only depend on the initialize function
+    if (!auth.user && !auth.isLoading) {
+      auth.initialize()
+    }
+  }, [auth.initialize])
 
-  // Auto-redirect after successful authentication
+  // Auto-redirect logic with better conditions
   useEffect(() => {
-    if (auth.isAuthenticated && !auth.isLoading) {
-      // Only redirect if we're on auth pages
+    // Only redirect if we're not currently loading and have a clear auth state
+    if (!auth.isLoading) {
       const currentPath = window.location.pathname
-      if (currentPath.startsWith('/auth/') || currentPath === '/') {
-        router.push('/dashboard')
+      
+      if (auth.isAuthenticated && auth.user) {
+        // User is authenticated - redirect away from auth pages
+        if (currentPath.startsWith('/auth/') || currentPath === '/') {
+          console.log('✅ User authenticated, redirecting to dashboard')
+          router.push('/dashboard')
+        }
+      } else {
+        // User is not authenticated - redirect to login if on protected pages
+        if (currentPath.startsWith('/dashboard')) {
+          console.log('❌ User not authenticated, redirecting to login')
+          router.push('/auth/login')
+        }
       }
     }
-  }, [auth.isAuthenticated, auth.isLoading, router])
+  }, [auth.isAuthenticated, auth.isLoading, auth.user, router])
 
   const requireAuth = useCallback(() => {
     if (!auth.isAuthenticated && !auth.isLoading) {
