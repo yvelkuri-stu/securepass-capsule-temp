@@ -1,4 +1,4 @@
-// 📁 src/app/dashboard/capsules/[id]/page.tsx (UPDATED with security)
+// 📁 src/app/dashboard/capsules/[id]/page.tsx (UPDATED with sharing functionality)
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { 
   ArrowLeft, 
   Edit, 
@@ -24,6 +25,7 @@ import {
 } from 'lucide-react'
 import { CapsulePasswordProtection } from '@/components/security/capsule-password-protection'
 import { CapsuleUnlockGuard } from '@/components/capsules/capsule-unlock-guard'
+import { CapsuleSharing } from '@/components/sharing/capsule-sharing'
 import { SecureCapsuleService, SecureCapsule } from '@/lib/secure-capsules'
 import { useCapsuleStore } from '@/store/capsules'
 import { useAuth } from '@/hooks/useAuth'
@@ -40,6 +42,7 @@ export default function SecureCapsuleViewPage() {
   const [capsule, setCapsule] = useState<SecureCapsule | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isSharingOpen, setIsSharingOpen] = useState(false)
   const [fileStats, setFileStats] = useState({ count: 0, totalSize: 0 })
 
   useEffect(() => {
@@ -112,6 +115,24 @@ export default function SecureCapsuleViewPage() {
     }
   }
 
+  const handleUpdateSharing = (updates: any) => {
+    if (!capsule) return;
+    
+    // In a real app, this would be a single API call to update the capsule's sharing settings.
+    // For now, we'll just optimistically update the local state.
+    setCapsule(prev => {
+        if (!prev) return null;
+        return {
+            ...prev,
+            sharing: {
+                ...prev.sharing,
+                ...updates
+            }
+        }
+    })
+    toast.success('Sharing settings updated!')
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -181,7 +202,7 @@ export default function SecureCapsuleViewPage() {
                 Edit
               </Button>
               
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={() => setIsSharingOpen(true)}>
                 <Share2 className="h-4 w-4 mr-2" />
                 Share
               </Button>
@@ -268,7 +289,7 @@ export default function SecureCapsuleViewPage() {
                           </Button>
                         </Link>
                         
-                        <Button variant="outline" className="w-full justify-start" disabled={!unlocked}>
+                        <Button variant="outline" className="w-full justify-start" disabled={!unlocked} onClick={() => setIsSharingOpen(true)}>
                           <Share2 className="h-4 w-4 mr-2" />
                           {unlocked ? 'Share Capsule' : 'Unlock to Share'}
                         </Button>
@@ -480,7 +501,7 @@ export default function SecureCapsuleViewPage() {
                     {capsule.isEncrypted ? 'Content Encrypted' : 'Encrypt Content'}
                   </Button>
                   
-                  <Button variant="outline" size="sm" className="w-full justify-start">
+                  <Button variant="outline" size="sm" className="w-full justify-start" onClick={() => setIsSharingOpen(true)}>
                     <Share2 className="h-4 w-4 mr-2" />
                     Sharing Settings
                   </Button>
@@ -506,6 +527,23 @@ export default function SecureCapsuleViewPage() {
               )}
             </div>
           </div>
+          
+          <Dialog open={isSharingOpen} onOpenChange={setIsSharingOpen}>
+            <DialogContent className="max-w-4xl">
+                <DialogHeader>
+                    <DialogTitle>Share "{capsule.title}"</DialogTitle>
+                </DialogHeader>
+                <CapsuleSharing
+                    capsuleId={capsule.id}
+                    capsuleTitle={capsule.title}
+                    isShared={capsule.sharing.isShared}
+                    sharedContacts={capsule.sharing.sharedWith as any[]} // Cast for now, should match types
+                    emergencyContacts={capsule.sharing.emergencyContacts}
+                    onUpdateSharing={handleUpdateSharing}
+                />
+            </DialogContent>
+          </Dialog>
+
         </motion.div>
       )}
     </CapsuleUnlockGuard>
