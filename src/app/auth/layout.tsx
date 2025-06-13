@@ -1,25 +1,20 @@
-// 📁 src/app/auth/layout.tsx
+// 📁 src/app/auth/layout.tsx (FIXED)
 'use client'
 
-import { useAuth } from '@/hooks/useAuth'
-import { useEffect } from 'react'
+import { AuthGuard } from '@/components/auth/auth-guard'
 
 export default function AuthLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const { redirectIfAuthenticated } = useAuth()
-
-  useEffect(() => {
-    redirectIfAuthenticated()
-  }, [redirectIfAuthenticated])
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/10 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {children}
+    <AuthGuard requireAuth={false}>
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/10 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          {children}
+        </div>
       </div>
-    </div>
+    </AuthGuard>
   )
 }
