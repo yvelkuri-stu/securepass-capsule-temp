@@ -1,4 +1,6 @@
 // 📁 src/hooks/useAuth.ts (FIXED - Proper redirect logic)
+'use client'
+
 import { useAuthStore } from '@/store/auth'
 import { useRouter } from 'next/navigation'
 import { useEffect, useCallback } from 'react'
@@ -6,13 +8,6 @@ import { useEffect, useCallback } from 'react'
 export function useAuth() {
   const auth = useAuthStore()
   const router = useRouter()
-
-  // Initialize auth on mount
-  useEffect(() => {
-    if (!auth.user && !auth.isLoading) {
-      auth.initialize()
-    }
-  }, [auth.initialize])
 
   // Auto-redirect logic with better conditions
   useEffect(() => {

@@ -1,4 +1,4 @@
-// 📁 src/components/sharing/capsule-sharing.tsx (NEW - Advanced Sharing)
+// 📁 src/components/sharing/capsule-sharing.tsx (FIXED)
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Calendar } from '@/components/ui/calendar'
-import { 
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -31,12 +31,19 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import { 
-  Share2, 
-  Users, 
-  Clock, 
-  Eye, 
-  Download, 
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+  } from '@/components/ui/dropdown-menu'
+import {
+  Share2,
+  Users,
+  Clock,
+  Eye,
+  Download,
   Edit,
   Trash2,
   AlertTriangle,
@@ -49,7 +56,8 @@ import {
   Mail,
   UserCheck,
   UserX,
-  History
+  History,
+  MoreVertical
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
@@ -118,7 +126,7 @@ export function CapsuleSharing({
       const link = `${window.location.origin}/shared/${capsuleId}?token=${generateShareToken()}`
       setPublicLink(link)
     }
-  }, [publicLinkEnabled, capsuleId])
+  }, [publicLinkEnabled, capsuleId, publicLink])
 
   const generateShareToken = () => {
     return Math.random().toString(36).substring(2) + Date.now().toString(36)

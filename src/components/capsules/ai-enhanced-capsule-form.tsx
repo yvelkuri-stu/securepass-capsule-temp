@@ -1,4 +1,4 @@
-// 📁 src/components/capsules/ai-enhanced-capsule-form.tsx (NEW - AI-Powered Creation)
+// 📁 src/components/capsules/ai-enhanced-capsule-form.tsx (FIXED)
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -11,12 +11,12 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Switch } from '@/components/ui/switch'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { 
-  Brain, 
-  Lightbulb, 
-  Shield, 
-  AlertTriangle, 
-  CheckCircle, 
+import {
+  Brain,
+  Lightbulb,
+  Shield,
+  AlertTriangle,
+  CheckCircle,
   Copy,
   Sparkles,
   Target,
@@ -27,6 +27,17 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { AIContentService, ContentAnalysis, DuplicateMatch } from '@/lib/ai-content-service'
 import { useCapsuleStore } from '@/store/capsules'
 import { toast } from 'sonner'
+import { SecurityLevel } from '@/types'
+
+interface AIEnhancedFormData {
+  title: string;
+  description: string;
+  content: string;
+  tags: string;
+  securityLevel: SecurityLevel;
+  enablePasswordProtection: boolean;
+  password: string;
+}
 
 interface AIEnhancedCapsuleFormProps {
   onSubmit: (data: any) => void
@@ -35,12 +46,12 @@ interface AIEnhancedCapsuleFormProps {
 
 export function AIEnhancedCapsuleForm({ onSubmit, isLoading }: AIEnhancedCapsuleFormProps) {
   const { capsules } = useCapsuleStore()
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<AIEnhancedFormData>({
     title: '',
     description: '',
     content: '',
     tags: '',
-    securityLevel: 'medium' as const,
+    securityLevel: 'medium',
     enablePasswordProtection: false,
     password: ''
   })
@@ -68,7 +79,7 @@ export function AIEnhancedCapsuleForm({ onSubmit, isLoading }: AIEnhancedCapsule
     }, 1000) // Debounce for 1 second
 
     return () => clearTimeout(debounceTimer)
-  }, [formData.content, aiEnabled])
+  }, [formData.content, aiEnabled, capsules])
 
   const performAIAnalysis = async () => {
     if (!formData.content.trim()) return
@@ -100,18 +111,18 @@ export function AIEnhancedCapsuleForm({ onSubmit, isLoading }: AIEnhancedCapsule
 
       // Auto-apply suggestions if confidence is high
       if (analysis.confidence > 80) {
-        setFormData(prev => ({
-          ...prev,
-          securityLevel: analysis.suggestedSecurity,
-          enablePasswordProtection: analysis.riskLevel > 70
-        }))
+        setFormData(prev => {
+          const newTitle = !prev.title && analysis.summary
+            ? analysis.summary.substring(0, 50)
+            : prev.title;
 
-        if (!prev.title && analysis.summary) {
-          setFormData(prev => ({
+          return {
             ...prev,
-            title: analysis.summary.substring(0, 50)
-          }))
-        }
+            title: newTitle,
+            securityLevel: analysis.suggestedSecurity,
+            enablePasswordProtection: analysis.riskLevel > 70,
+          };
+        });
       }
 
       toast.success('AI analysis complete!')

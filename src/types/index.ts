@@ -150,7 +150,7 @@ declare global {
   }
 
   // Declares the SyncManager class available globally
-  declare class SyncManager {
+  class SyncManager {
     register(tag: string): Promise<void>;
     getTags(): Promise<string[]>;
   }

@@ -63,9 +63,9 @@ export class AIContentService {
     
     return {
       ...contentAnalysis,
-      tags: [...new Set([...filenameAnalysis.tags, ...contentAnalysis.tags])],
+      tags: [...new Set([...(filenameAnalysis.tags || []), ...contentAnalysis.tags])],
       category: filenameAnalysis.category || contentAnalysis.category,
-      confidence: Math.min(filenameAnalysis.confidence + contentAnalysis.confidence, 100)
+      confidence: Math.min((filenameAnalysis.confidence || 0) + contentAnalysis.confidence, 100)
     }
   }
 
@@ -213,7 +213,7 @@ export class AIContentService {
     
     // Category detection
     let category = 'General'
-    let suggestedSecurity: 'low' | 'medium' | 'high' | 'maximum' = 'medium'
+    let suggestedSecurity: 'low' | 'medium' | 'high' | 'maximum' = 'low'
     let containsPII = false
     let riskLevel = 30
     
@@ -282,7 +282,9 @@ export class AIContentService {
     if (this.detectPII(content)) {
       containsPII = true
       riskLevel = Math.max(riskLevel, 70)
-      suggestedSecurity = suggestedSecurity === 'low' ? 'medium' : suggestedSecurity
+      if (suggestedSecurity === 'low') {
+        suggestedSecurity = 'medium';
+      }
     }
     
     return {

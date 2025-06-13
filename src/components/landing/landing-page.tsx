@@ -1,4 +1,3 @@
-
 // 📁 src/components/landing/landing-page.tsx
 'use client'
 
@@ -120,7 +119,7 @@ export function LandingPage() {
                 <ChevronRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>
-            <Link href="/demo">
+            <Link href="/dashboard/demo">
               <Button variant="outline" size="lg" className="w-full sm:w-auto">
                 View Demo
               </Button>
