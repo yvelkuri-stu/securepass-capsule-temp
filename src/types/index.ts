@@ -80,19 +80,25 @@ export interface SharingSettings {
 }
 
 export interface SharedContact {
+  id: string; // This was missing
   email: string
+  name?: string; // This was missing
   permissions: Permission[]
   sharedAt: Date
   accessedAt?: Date
   expiresAt?: Date
+  status: 'pending' | 'accepted' | 'expired' | 'revoked'; // This was missing
 }
 
 export interface EmergencyContact {
+  id: string; // This was missing
   email: string
   name: string
   relationship: string
   activationDelay: number // hours
   conditions: EmergencyCondition[]
+  notificationSent?: Date;
+  activated?: Date;
 }
 
 export interface SecuritySettings {
