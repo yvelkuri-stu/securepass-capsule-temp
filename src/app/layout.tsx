@@ -7,9 +7,14 @@ import { Toaster } from 'sonner'
 
 const inter = Inter({ subsets: ['latin'] })
 
+const appUrl = process.env.NEXT_PUBLIC_APP_URL
+  ? (process.env.NEXT_PUBLIC_APP_URL.startsWith('http')
+    ? process.env.NEXT_PUBLIC_APP_URL
+    : `https://${process.env.NEXT_PUBLIC_APP_URL}`)
+  : 'http://localhost:3000';
   
   export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'),
+  metadataBase: new URL(appUrl),
   title: 'SecurePass Capsule - Secure Data Storage',
   description: 'Store and manage your personal data securely with zero-knowledge encryption',
   manifest: '/manifest.json',
