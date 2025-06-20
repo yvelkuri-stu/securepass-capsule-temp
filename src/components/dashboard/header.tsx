@@ -1,7 +1,7 @@
 // 📁 src/components/dashboard/header.tsx (Mobile-responsive header with online/offline indicator)
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -22,16 +22,23 @@ import {
   Wifi,
   WifiOff,
   Plus,
-  Menu
+  Menu,
+  Check
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { usePWA } from '@/hooks/usePWA'
+import { useNotificationStore } from '@/store/notification'
+import { useNotificationListener } from '@/hooks/useNotificationListener'
 import Link from 'next/link'
+import { formatDate } from '@/lib/utils'
 
 export function DashboardHeader() {
   const { user, logout } = useAuth()
-  const { isOnline, isInstalled } = usePWA()
-  const [notifications, setNotifications] = useState(2) // Mock notification count
+  const { isOnline } = usePWA()
+  const { notifications, unreadCount, markAsRead } = useNotificationStore()
+
+  // Hook to listen for new notifications
+  useNotificationListener();
 
   const getInitials = (name: string) => {
     return name
@@ -83,30 +90,38 @@ export function DashboardHeader() {
             )}
           </div>
 
-          {/* PWA Install Status - Hidden on small screens */}
-          {isInstalled && (
-            <Badge variant="outline" className="hidden lg:flex text-xs">
-              📱 PWA
-            </Badge>
-          )}
-
-          {/* Security Score - Hidden on small screens */}
-          <div className="hidden lg:flex items-center space-x-2">
-            <Shield className="h-4 w-4 text-green-500" />
-            <Badge variant="success" className="font-medium">
-              {user?.securityScore}%
-            </Badge>
-          </div>
-
           {/* Notifications */}
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-4 w-4" />
-            {notifications > 0 && (
-              <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center font-medium">
-                {notifications > 9 ? '9+' : notifications}
-              </span>
-            )}
-          </Button>
+          <DropdownMenu onOpenChange={(open) => !open && markAsRead()}>
+            <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="relative">
+                    <Bell className="h-4 w-4" />
+                    {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center font-medium">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                    )}
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-80" align="end">
+                <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {notifications.length > 0 ? (
+                    notifications.slice(0, 5).map(notif => (
+                        <DropdownMenuItem key={notif.id} className="flex flex-col items-start gap-1">
+                            <p className="text-sm font-medium">{notif.description}</p>
+                            <p className="text-xs text-muted-foreground">{formatDate(notif.timestamp)}</p>
+                        </DropdownMenuItem>
+                    ))
+                ) : (
+                    <DropdownMenuItem disabled>No new notifications</DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={markAsRead} className="flex items-center justify-center">
+                    <Check className="mr-2 h-4 w-4" />
+                    Mark all as read
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* User Menu */}
           <DropdownMenu>
@@ -129,16 +144,6 @@ export function DashboardHeader() {
                   <p className="text-xs leading-none text-muted-foreground">
                     {user?.email}
                   </p>
-                  <div className="flex items-center space-x-2 mt-2">
-                    <Badge variant="success" className="text-xs">
-                      {user?.securityScore}% Secure
-                    </Badge>
-                    {!isOnline && (
-                      <Badge variant="destructive" className="text-xs">
-                        Offline
-                      </Badge>
-                    )}
-                  </div>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
@@ -155,13 +160,6 @@ export function DashboardHeader() {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/dashboard/capsules/new" className="flex items-center md:hidden">
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Capsule
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="md:hidden" />
               <DropdownMenuItem 
                 onClick={logout}
                 className="flex items-center text-red-600 focus:text-red-600"
