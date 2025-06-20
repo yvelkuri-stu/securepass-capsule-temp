@@ -106,6 +106,17 @@ export function DashboardSidebar() {
             )}
           </Button>
         )}
+
+        {isMobile && (
+           <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setMobileOpen(false)}
+            className="text-primary-foreground hover:bg-primary/20"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
       </div>
 
       <Separator className="bg-border/50" />
@@ -172,7 +183,7 @@ export function DashboardSidebar() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 z-40 md:hidden"
+              className="fixed inset-0 bg-black/50 z-40"
               onClick={() => setMobileOpen(false)}
             />
             <motion.div
@@ -180,7 +191,7 @@ export function DashboardSidebar() {
               animate={{ x: 0 }}
               exit={{ x: -280 }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed left-0 top-0 h-full w-80 border-r border-border/50 flex flex-col z-50 md:hidden"
+              className="fixed left-0 top-0 h-full w-80 border-r border-border/50 flex flex-col z-50"
             >
               {sidebarContent}
             </motion.div>
