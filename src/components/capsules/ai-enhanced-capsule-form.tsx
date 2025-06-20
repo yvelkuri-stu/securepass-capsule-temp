@@ -42,18 +42,19 @@ interface AIEnhancedFormData {
 interface AIEnhancedCapsuleFormProps {
   onSubmit: (data: any) => void
   isLoading?: boolean
+  initialData?: Partial<AIEnhancedFormData>
 }
 
-export function AIEnhancedCapsuleForm({ onSubmit, isLoading }: AIEnhancedCapsuleFormProps) {
+export function AIEnhancedCapsuleForm({ onSubmit, isLoading, initialData }: AIEnhancedCapsuleFormProps) {
   const { capsules } = useCapsuleStore()
   const [formData, setFormData] = useState<AIEnhancedFormData>({
-    title: '',
-    description: '',
-    content: '',
-    tags: '',
-    securityLevel: 'medium',
-    enablePasswordProtection: false,
-    password: ''
+    title: initialData?.title || '',
+    description: initialData?.description || '',
+    content: initialData?.content || '',
+    tags: initialData?.tags || '',
+    securityLevel: initialData?.securityLevel || 'medium',
+    enablePasswordProtection: initialData?.enablePasswordProtection || false,
+    password: '',
   })
 
   // AI Analysis State
@@ -110,7 +111,7 @@ export function AIEnhancedCapsuleForm({ onSubmit, isLoading }: AIEnhancedCapsule
       setAnalysisProgress(100)
 
       // Auto-apply suggestions if confidence is high
-      if (analysis.confidence > 80) {
+      if (!initialData && analysis.confidence > 80) {
         setFormData(prev => {
           const newTitle = !prev.title && analysis.summary
             ? analysis.summary.substring(0, 50)
@@ -573,12 +574,12 @@ export function AIEnhancedCapsuleForm({ onSubmit, isLoading }: AIEnhancedCapsule
         {isLoading ? (
           <>
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-            Creating Capsule...
+            {initialData ? 'Updating Capsule...' : 'Creating Capsule...'}
           </>
         ) : (
           <>
             <Sparkles className="h-4 w-4 mr-2" />
-            Create AI-Enhanced Capsule
+            {initialData ? 'Update AI-Enhanced Capsule' : 'Create AI-Enhanced Capsule'}
           </>
         )}
       </Button>

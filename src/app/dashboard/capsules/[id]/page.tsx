@@ -1,4 +1,4 @@
-// 📁 src/app/dashboard/capsules/[id]/page.tsx (UPDATED with sharing functionality)
+// 📁 src/app/dashboard/capsules/[id]/page.tsx (UPDATED with security)
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -197,7 +197,7 @@ export default function SecureCapsuleViewPage() {
             </div>
             
             <div className="flex items-center space-x-2">
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/capsules/${capsule.id}/edit`)}>
                 <Edit className="h-4 w-4 mr-2" />
                 Edit
               </Button>
