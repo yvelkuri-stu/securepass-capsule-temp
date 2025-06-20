@@ -1,5 +1,4 @@
-
-// 📁 src/lib/auth.ts (Updated with better error handling)
+// 📁 src/lib/auth.ts (Updated with better error handling and social login)
 import { supabase } from './supabase'
 import { User } from '@/types'
 import { validateEnv } from './env'
@@ -53,6 +52,18 @@ export class AuthService {
     }
 
     return data
+  }
+
+  // Sign in with Google
+  static async signInWithGoogle() {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+
+    if (error) throw error
   }
 
   // Sign out

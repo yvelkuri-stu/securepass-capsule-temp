@@ -1,4 +1,3 @@
-
 // 📁 src/app/auth/register/page.tsx
 'use client'
 
@@ -13,6 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Shield, Eye, EyeOff, Loader2, CheckCircle } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { toast } from 'sonner'
+import { SocialLogins } from '@/components/auth/social-logins'
 
 const passwordRequirements = [
   { regex: /.{8,}/, text: 'At least 8 characters' },
@@ -133,8 +133,8 @@ export default function RegisterPage() {
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
                   onClick={() => setShowPassword(!showPassword)}
                   disabled={isLoading}
                 >
@@ -201,8 +201,8 @@ export default function RegisterPage() {
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   disabled={isLoading}
                 >
@@ -256,6 +256,8 @@ export default function RegisterPage() {
                 'Create Account'
               )}
             </Button>
+            
+            <SocialLogins />
           </form>
 
           {/* Sign In Link */}

@@ -1,4 +1,3 @@
-
 // 📁 src/app/auth/login/page.tsx
 'use client'
 
@@ -9,10 +8,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
-import { Shield, Eye, EyeOff, Fingerprint, Loader2 } from 'lucide-react'
+import { Shield, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { toast } from 'sonner'
+import { SocialLogins } from '@/components/auth/social-logins'
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({
@@ -20,7 +19,6 @@ export default function LoginPage() {
     password: '',
   })
   const [showPassword, setShowPassword] = useState(false)
-  const [biometricAvailable, setBiometricAvailable] = useState(false)
   
   const { login, isLoading, error } = useAuth()
 
@@ -37,17 +35,6 @@ export default function LoginPage() {
       toast.success('Welcome back!')
     } catch (err) {
       toast.error('Login failed. Please check your credentials.')
-    }
-  }
-
-  const handleBiometricLogin = async () => {
-    // Mock biometric authentication
-    if (window.navigator.credentials) {
-      try {
-        toast.info('Biometric authentication would be triggered here')
-      } catch (err) {
-        toast.error('Biometric authentication failed')
-      }
     }
   }
 
@@ -98,8 +85,8 @@ export default function LoginPage() {
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
                   onClick={() => setShowPassword(!showPassword)}
                   disabled={isLoading}
                 >
@@ -143,20 +130,7 @@ export default function LoginPage() {
             </div>
           </form>
 
-          {/* Biometric Login */}
-          <div className="mt-6">
-            <Separator className="my-4" />
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={handleBiometricLogin}
-              disabled={isLoading}
-            >
-              <Fingerprint className="mr-2 h-4 w-4" />
-              Use Biometric Authentication
-            </Button>
-          </div>
+          <SocialLogins />
 
           {/* Sign Up Link */}
           <div className="mt-6 text-center text-sm">
