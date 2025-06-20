@@ -1,6 +1,5 @@
 // 📁 src/store/auth.ts (FIXED - Robust initialization and state management)
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import { AuthState, User } from '@/types'
 import { AuthService } from '@/lib/auth'
 
@@ -11,29 +10,27 @@ interface AuthStore extends AuthState {
   updateUser: (updates: Partial<User>) => Promise<void>
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
-  initialize: () => void
-  initialized: boolean
+  initialize: () => () => void // Returns the unsubscribe function
 }
 
-export const useAuthStore = create<AuthStore>()(
-  persist(
-    (set, get) => ({
+let onAuthStateChangeUnsubscribe: (() => void) | null = null;
+
+export const useAuthStore = create<AuthStore>()((set, get) => ({
       user: null,
       isAuthenticated: false,
       isLoading: true, // Start as true until first auth state is known
       error: null,
-      initialized: false,
 
       initialize: () => {
-        if (get().initialized) {
-          return;
+        // If a listener is already active, unsubscribe from it first
+        if (onAuthStateChangeUnsubscribe) {
+            onAuthStateChangeUnsubscribe();
         }
-        console.log('🚀 Initializing authentication listener...');
-        set({ initialized: true }); // Mark as initialized immediately
 
-        // onAuthStateChange is the single source of truth.
-        // It fires once on load with the initial session, and then on every auth change.
-        AuthService.onAuthStateChange((user) => {
+        console.log('🚀 Initializing authentication listener...');
+        
+        // Set up the listener and store the unsubscribe function
+        const { data: { subscription } } = AuthService.onAuthStateChange((user) => {
           console.log('🔄 Auth state changed:', user ? user.email : 'logged out');
           set({
             user,
@@ -42,6 +39,10 @@ export const useAuthStore = create<AuthStore>()(
             error: null,
           });
         });
+
+        onAuthStateChangeUnsubscribe = subscription.unsubscribe;
+
+        return onAuthStateChangeUnsubscribe;
       },
 
       login: async (email: string, password: string) => {
@@ -114,13 +115,4 @@ export const useAuthStore = create<AuthStore>()(
 
       setLoading: (loading: boolean) => set({ isLoading: loading }),
       setError: (error: string | null) => set({ error }),
-    }),
-    {
-      name: 'auth-storage',
-      partialize: (state) => ({ 
-        // Only persist a minimal flag to prevent re-initialization
-        initialized: state.initialized 
-      }),
-    }
-  )
-)
+}))
