@@ -1,4 +1,4 @@
-// 📁 src/components/dashboard/sidebar.tsx (Mobile-responsive sidebar)
+// 📁 src/components/dashboard/sidebar.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -7,13 +7,13 @@ import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { 
-  Shield, 
-  LayoutDashboard, 
-  Archive, 
-  Share2, 
-  Settings, 
-  ChevronLeft, 
+import {
+  Shield,
+  LayoutDashboard,
+  Archive,
+  Share2,
+  Settings,
+  ChevronLeft,
   ChevronRight,
   Plus,
   Menu,
@@ -42,7 +42,7 @@ const navigation = [
     href: '/dashboard/settings',
     icon: Settings,
   },
-   {
+  {
     name: 'Security',
     href: '/dashboard/security',
     icon: Shield,
@@ -62,7 +62,7 @@ export function DashboardSidebar() {
         setCollapsed(false) // Don't collapse on mobile, use overlay instead
       }
     }
-    
+
     checkMobile()
     window.addEventListener('resize', checkMobile)
     return () => window.removeEventListener('resize', checkMobile)
@@ -88,7 +88,7 @@ export function DashboardSidebar() {
             <span className="font-bold text-primary-foreground">SecurePass</span>
           </motion.div>
         )}
-        
+
         {!isMobile && (
           <Button
             variant="ghost"
@@ -121,7 +121,7 @@ export function DashboardSidebar() {
       {/* Quick Action */}
       <div className="p-4">
         <Link href="/dashboard/capsules/new">
-          <Button 
+          <Button
             className={cn(
               "w-full justify-start bg-gradient-accent hover:opacity-90",
               (collapsed && !isMobile) && "justify-center"
@@ -134,10 +134,10 @@ export function DashboardSidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-2">
+      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
         {navigation.map((item) => {
           const isActive = pathname === item.href
-          
+
           return (
             <Link key={item.name} href={item.href}>
               <Button
