@@ -77,7 +77,7 @@ export function DashboardSidebar() {
   }, [pathname, isMobile])
 
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-gradient-dark text-primary-foreground">
+    <>
       {/* Logo & Collapse Button */}
       <div className="p-4 flex items-center justify-between flex-shrink-0">
         {(!collapsed || isMobile) && (
@@ -88,7 +88,7 @@ export function DashboardSidebar() {
             className="flex items-center space-x-2"
           >
             <Shield className="h-6 w-6 text-primary" />
-            <span className="font-bold">SecurePass</span>
+            <span className="font-bold text-primary-foreground">SecurePass</span>
           </motion.div>
         )}
         
@@ -107,7 +107,7 @@ export function DashboardSidebar() {
           </Button>
         )}
 
-        {isMobile && (
+         {isMobile && (
            <Button
             variant="ghost"
             size="icon"
@@ -119,7 +119,7 @@ export function DashboardSidebar() {
         )}
       </div>
 
-      <Separator className="bg-border/50" />
+      <Separator className="bg-border/50 flex-shrink-0" />
 
       {/* Quick Action */}
       <div className="p-4 flex-shrink-0">
@@ -158,7 +158,7 @@ export function DashboardSidebar() {
           )
         })}
       </nav>
-    </div>
+    </>
   )
 
   return (
@@ -191,7 +191,7 @@ export function DashboardSidebar() {
               animate={{ x: 0 }}
               exit={{ x: -280 }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed left-0 top-0 h-full w-80 border-r border-border/50 flex flex-col z-50"
+              className="fixed left-0 top-0 h-full w-80 bg-gradient-dark border-r border-border/50 flex flex-col z-50"
             >
               {sidebarContent}
             </motion.div>
@@ -203,7 +203,7 @@ export function DashboardSidebar() {
       <motion.div
         animate={{ width: collapsed ? 80 : 280 }}
         transition={{ duration: 0.3, ease: 'easeInOut' }}
-        className="hidden md:flex flex-shrink-0"
+        className="hidden md:flex flex-col flex-shrink-0 bg-gradient-dark"
       >
         {sidebarContent}
       </motion.div>
