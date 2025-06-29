@@ -11,75 +11,65 @@ import { PWAUpdateNotification } from '@/components/pwa/update-notification'
 import { PWAUtils } from '@/lib/pwa-utils'
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient({
-    defaultOptions: {
-      queries: {
-        staleTime: 60 * 1000, // 1 minute
-        refetchOnWindowFocus: false,
-        retry: (failureCount, error) => {
-          // Don't retry if offline
-          if (!navigator.onLine) return false
-          return failureCount < 3
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 60 * 1000, // 1 minute
+            retry: 1,
+          },
         },
-      },
-    },
-  }))
-
-  const initialize = useAuthStore(state => state.initialize)
+      })
+  )
+  
+  const [mounted, setMounted] = useState(false)
+  const initialize = useAuthStore((state) => state.initialize)
 
   useEffect(() => {
-    // Initialize auth when the app starts
+    setMounted(true)
+    
+    // Initialize auth store
     initialize()
 
-    // Register service worker for PWA functionality
-    PWAUtils.registerServiceWorker()
-
-    // Request notification permission after a delay
-    setTimeout(() => {
-      PWAUtils.requestNotificationPermission()
-    }, 5000)
-
-    // Set up background sync for offline functionality
-    if ('serviceWorker' in navigator && 'sync' in window.ServiceWorkerRegistration.prototype) {
-      navigator.serviceWorker.ready.then(registration => {
-        // Register for background sync when app comes back online
-        return registration.sync.register('background-sync')
-      }).catch(err => {
-        console.log('Background sync registration failed:', err)
-      })
-    }
-
-    // Set up push notification handling
-    if ('serviceWorker' in navigator && 'PushManager' in window) {
-      navigator.serviceWorker.ready.then(registration => {
-        // Set up push notifications for app updates and important notifications
-        registration.pushManager.getSubscription().then(subscription => {
-          if (!subscription) {
-            console.log('No push subscription found')
-          } else {
-            console.log('Push subscription active')
-          }
+    // Initialize PWA features with delay to avoid preload warning
+    const initPWA = async () => {
+      // Wait for page to fully load before initializing PWA
+      if (document.readyState === 'complete') {
+        await PWAUtils.initialize()
+      } else {
+        window.addEventListener('load', () => {
+          // Additional delay to ensure everything is settled
+          setTimeout(() => {
+            PWAUtils.initialize()
+          }, 500)
         })
-      })
+      }
     }
 
+    initPWA()
   }, [initialize])
 
+  // Don't render anything on server or before mounting
+  if (!mounted) {
+    return null
+  }
+
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      disableTransitionOnChange
-    >
-      <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="system"
+        enableSystem
+        disableTransitionOnChange
+      >
         {children}
         
         {/* PWA Components */}
         <PWAInstallPrompt />
         <OfflineIndicator />
         <PWAUpdateNotification />
-      </QueryClientProvider>
-    </ThemeProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   )
 }

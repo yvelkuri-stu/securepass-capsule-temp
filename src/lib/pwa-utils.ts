@@ -1,142 +1,197 @@
 // 📁 src/lib/pwa-utils.ts (FIXED - Client-side checks and update prompt handler)
-
-// Define a local interface that extends NotificationOptions to include 'vibrate'
-// This is a workaround if the global NotificationOptions type is missing this property.
 interface CustomNotificationOptions extends NotificationOptions {
   vibrate?: number[] | number;
 }
 
 export class PWAUtils {
-  // A static property to hold the function that will handle update prompts
-  private static updatePromptHandler: (() => void) | null = null;
+  private static updatePromptHandler: (() => void) | null = null
 
-  /**
-   * Sets a callback function to be called when a new service worker is installed
-   * and ready to activate, prompting the user for an update.
-   * This allows the UI layer to display a custom prompt (e.g., a toast or modal).
-   * @param handler A function to be called when an update is available. Pass `null` to clear.
-   */
   static setUpdatePromptHandler(handler: (() => void) | null) {
-    PWAUtils.updatePromptHandler = handler;
+    this.updatePromptHandler = handler
   }
 
-  // Register service worker
   static async registerServiceWorker() {
-    // Ensure we are in a client-side environment with service worker support
-    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
-      console.log('Service Worker API not available in this environment.');
-      return;
+    if (
+      typeof window !== 'undefined' &&
+      'serviceWorker' in navigator &&
+      process.env.NODE_ENV === 'production'
+    ) {
+      try {
+        // Register service worker without preloading
+        const registration = await navigator.serviceWorker.register('/sw.js', {
+          scope: '/',
+        })
+
+        console.log('Service Worker registered successfully:', registration.scope)
+
+        // Check for updates
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing
+          if (newWorker) {
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                // New update available
+                this.showUpdatePrompt()
+              }
+            })
+          }
+        })
+
+        // Handle waiting service worker
+        if (registration.waiting) {
+          this.showUpdatePrompt()
+        }
+
+        return registration
+      } catch (error) {
+        console.error('Service Worker registration failed:', error)
+        return null
+      }
+    }
+    return null
+  }
+
+  static showUpdatePrompt() {
+    if (this.updatePromptHandler) {
+      this.updatePromptHandler()
+    }
+  }
+
+  static async requestNotificationPermission(): Promise<boolean> {
+    if (!('Notification' in window)) {
+      console.warn('This browser does not support notifications')
+      return false
+    }
+
+    if (Notification.permission === 'granted') {
+      return true
+    }
+
+    if (Notification.permission === 'denied') {
+      return false
     }
 
     try {
-      const registration = await navigator.serviceWorker.register('/sw.js', {
-        scope: '/'
-      });
-
-      console.log('✅ Service Worker registered:', registration.scope);
-
-      // Listen for updates
-      registration.addEventListener('updatefound', () => {
-        const newWorker = registration.installing;
-        if (newWorker) {
-          newWorker.addEventListener('statechange', () => {
-            // New service worker has installed and is waiting to activate
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              console.log('🔄 New service worker installed, signaling for update prompt');
-              // Call the registered update prompt handler, if any
-              if (PWAUtils.updatePromptHandler) {
-                PWAUtils.updatePromptHandler();
-              } else {
-                
-                console.warn('PWAUtils: No custom update prompt handler set. User will not be prompted for update.');
-              }
-            }
-          });
-        }
-      });
-
-      return registration;
+      const permission = await Notification.requestPermission()
+      return permission === 'granted'
     } catch (error) {
-      console.error('❌ Service Worker registration failed:', error);
+      console.error('Error requesting notification permission:', error)
+      return false
     }
   }
 
-  // This method is now deprecated. The update prompt logic is handled via `setUpdatePromptHandler`.
-  static showUpdatePrompt() {
-    console.warn('PWAUtils.showUpdatePrompt() is deprecated. Please use PWAUtils.setUpdatePromptHandler() and handle the prompt in your UI component.');
-    if (PWAUtils.updatePromptHandler) {
-        PWAUtils.updatePromptHandler();
-    }
-  }
-
-  // Request notification permission
-  static async requestNotificationPermission(): Promise<boolean> {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
-      return false;
-    }
-
-    const permission = await Notification.requestPermission();
-    return permission === 'granted';
-  }
-
-  // Send push notification
   static async sendNotification(title: string, options?: CustomNotificationOptions) {
-    if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('Notification' in window)) {
-      console.warn('Notification or Service Worker API not available.');
-      return;
+    if (!('Notification' in window)) {
+      console.warn('This browser does not support notifications')
+      return
     }
 
-    const permission = await Notification.requestPermission();
+    if (Notification.permission !== 'granted') {
+      const granted = await this.requestNotificationPermission()
+      if (!granted) {
+        console.warn('Notification permission not granted')
+        return
+      }
+    }
 
-    if (permission === 'granted') {
-      const registration = await navigator.serviceWorker.ready;
-      return registration.showNotification(title, {
+    try {
+      const notification = new Notification(title, {
         icon: '/icons/icon-192x192.png',
-        badge: '/icons/badge-72x72.png',
-        vibrate: [100, 50, 100], // Now 'vibrate' is a known property in CustomNotificationOptions
-        ...options
-      });
+        badge: '/icons/icon-96x96.png',
+        tag: 'securepass-notification',
+        renotify: true,
+        requireInteraction: false,
+        ...options,
+      })
+
+      // Auto-close after 5 seconds if not clicked
+      setTimeout(() => {
+        notification.close()
+      }, 5000)
+
+      return notification
+    } catch (error) {
+      console.error('Error sending notification:', error)
     }
   }
 
-  // Cache management
   static async clearCache() {
-    if (typeof window === 'undefined' || !('caches' in window)) {
-      return;
+    if ('caches' in window) {
+      try {
+        const cacheNames = await caches.keys()
+        await Promise.all(
+          cacheNames.map(cacheName => caches.delete(cacheName))
+        )
+        console.log('All caches cleared')
+      } catch (error) {
+        console.error('Error clearing caches:', error)
+      }
     }
-
-    const cacheNames = await caches.keys();
-    await Promise.all(
-      cacheNames.map(cacheName => caches.delete(cacheName))
-    );
-    console.log('🗑️ All caches cleared');
   }
 
-  // Check if app is installed
   static isInstalled(): boolean {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-
-    // Check for PWA installation status
-    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
-           ((window.navigator as any).standalone === true); // For iOS Safari
+    if (typeof window === 'undefined') return false
+    
+    // Check if app is installed
+    return (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: fullscreen)').matches ||
+      // @ts-ignore
+      window.navigator.standalone === true
+    )
   }
 
-  // Get device type
   static getDeviceType(): 'mobile' | 'tablet' | 'desktop' {
-    if (typeof navigator === 'undefined') {
-      return 'desktop'; // Default for SSR
-    }
+    if (typeof window === 'undefined') return 'desktop'
+    
+    const userAgent = navigator.userAgent.toLowerCase()
+    const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/.test(userAgent)
+    const isTablet = /ipad|android(?!.*mobile)/.test(userAgent) || 
+                    (window.innerWidth >= 768 && window.innerWidth <= 1024)
+    
+    if (isMobile && !isTablet) return 'mobile'
+    if (isTablet) return 'tablet'
+    return 'desktop'
+  }
 
-    const userAgent = navigator.userAgent.toLowerCase();
+  // Initialize PWA features
+  static async initialize() {
+    if (typeof window === 'undefined') return
 
-    if (/mobile|android|iphone|ipod|blackberry|iemobile/.test(userAgent)) {
-      return 'mobile';
-    } else if (/tablet|ipad/.test(userAgent)) {
-      return 'tablet';
-    } else {
-      return 'desktop';
-    }
+    // Register service worker
+    await this.registerServiceWorker()
+
+    // Request notification permission on user interaction
+    document.addEventListener('click', async () => {
+      await this.requestNotificationPermission()
+    }, { once: true })
+
+    // Handle app installation
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault()
+      // Store the event for later use
+      window.deferredPrompt = e
+    })
+
+    // Handle app installed
+    window.addEventListener('appinstalled', () => {
+      console.log('PWA was installed')
+      window.deferredPrompt = null
+    })
+  }
+}
+
+// Auto-initialize when loaded
+if (typeof window !== 'undefined') {
+  // Use requestIdleCallback for better performance
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(() => {
+      PWAUtils.initialize()
+    })
+  } else {
+    // Fallback for browsers without requestIdleCallback
+    setTimeout(() => {
+      PWAUtils.initialize()
+    }, 1000)
   }
 }
