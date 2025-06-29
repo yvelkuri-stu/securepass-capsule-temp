@@ -99,8 +99,8 @@ export class PWAUtils {
         icon: '/icons/icon-192x192.png',
         badge: '/icons/icon-96x96.png',
         tag: 'securepass-notification',
-        renotify: true,
         requireInteraction: false,
+        silent: false,
         ...options,
       })
 
