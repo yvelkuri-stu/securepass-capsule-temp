@@ -1,44 +1,73 @@
-// 📁 src/lib/supabase.ts (Fixed with proper error handling)
+// src/lib/supabase.ts
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '@/types/supabase'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+// Get environment variables with fallbacks for build time
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
-// Better error messages for debugging
-if (!supabaseUrl) {
-  throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL environment variable')
+// Validate environment variables only when actually using the client
+function validateSupabaseEnv() {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      `Missing Supabase configuration. Please check your environment variables:
+      - NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl ? '✓' : '✗'}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY: ${supabaseAnonKey ? '✓' : '✗'}`
+    )
+  }
 }
 
-if (!supabaseAnonKey) {
-  throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable')
-}
+// Create client with lazy validation
+let supabaseClient: ReturnType<typeof createClient<Database>> | null = null
 
-// Client-side Supabase client
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true
+export const supabase = new Proxy({} as ReturnType<typeof createClient<Database>>, {
+  get(target, prop) {
+    // Initialize client on first access
+    if (!supabaseClient) {
+      validateSupabaseEnv()
+      supabaseClient = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: true,
+        },
+      })
+    }
+    
+    return supabaseClient[prop as keyof typeof supabaseClient]
   }
 })
 
-// Server-side Supabase client (for API routes) - only create if service key exists
-export const supabaseAdmin = supabaseServiceKey 
-  ? createClient<Database>(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    })
-  : null
-
-// Export a safe admin client that shows a warning if not configured
+// Admin client for server-side operations
 export const getSupabaseAdmin = () => {
-  if (!supabaseAdmin) {
-    console.warn('Supabase admin client not configured - some features may not work')
-    return supabase // Fallback to regular client
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    throw new Error('Missing Supabase admin configuration')
   }
-  return supabaseAdmin
+  
+  return createClient<Database>(supabaseUrl, supabaseServiceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  })
+}
+
+// Utility function to check if Supabase is properly configured
+export const isSupabaseConfigured = (): boolean => {
+  return !!(supabaseUrl && supabaseAnonKey)
+}
+
+// Test connection function
+export const testSupabaseConnection = async (): Promise<boolean> => {
+  try {
+    if (!isSupabaseConfigured()) {
+      return false
+    }
+    
+    const { error } = await supabase.from('profiles').select('count').limit(1)
+    return !error
+  } catch {
+    return false
+  }
 }

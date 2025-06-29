@@ -1,4 +1,3 @@
-// 📁 src/lib/auth.ts (Updated with better error handling and social login)
 import { supabase } from './supabase'
 import { User } from '@/types'
 import { validateEnv } from './env'
@@ -10,11 +9,22 @@ export class AuthService {
     if (this.isInitialized) return
     
     try {
-      validateEnv()
+      // Only validate env in browser or when explicitly needed
+      if (typeof window !== 'undefined') {
+        validateEnv()
+      }
       this.isInitialized = true
       console.log('AuthService initialized successfully')
     } catch (error) {
       console.error('AuthService initialization failed:', error)
+      
+      // In production, provide more helpful error message
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(
+          'Authentication service is not properly configured. Please contact support.'
+        )
+      }
+      
       throw new Error('Authentication service initialization failed')
     }
   }
