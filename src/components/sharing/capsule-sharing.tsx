@@ -1,6 +1,3 @@
-// 📁 src/components/sharing/capsule-sharing.tsx (FIXED - Advanced Sharing)
-'use client'
-
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Calendar } from '@/components/ui/calendar'
-import { 
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -38,12 +35,12 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
   } from '@/components/ui/dropdown-menu'
-import { 
-  Share2, 
-  Users, 
-  Clock, 
-  Eye, 
-  Download, 
+import {
+  Share2,
+  Users,
+  Clock,
+  Eye,
+  Download,
   Edit,
   Trash2,
   AlertTriangle,
@@ -62,7 +59,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
-import { CapsuleService } from '@/lib/capsules'
+import { supabase } from '@/lib/supabase'
 
 interface SharedContact {
   id: string
@@ -80,7 +77,7 @@ interface EmergencyContact {
   email: string
   name: string
   relationship: string
-  activationDelay: number // hours
+  activationDelay: number
   conditions: EmergencyCondition[]
   notificationSent?: Date
   activated?: Date
@@ -101,269 +98,595 @@ interface CapsuleSharingProps {
 export function CapsuleSharing({
   capsuleId,
   capsuleTitle,
-  isShared,
+  isShared: initialIsShared,
   sharedContacts: initialSharedContacts,
   emergencyContacts: initialEmergencyContacts,
   onUpdateSharing
 }: CapsuleSharingProps) {
+  // State
+  const [isShared, setIsShared] = useState(initialIsShared)
   const [sharedContacts, setSharedContacts] = useState<SharedContact[]>(initialSharedContacts)
   const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>(initialEmergencyContacts)
-  const [shareEmail, setShareEmail] = useState('')
-  const [sharePermissions, setSharePermissions] = useState<Permission[]>(['view'])
-  const [shareExpiry, setShareExpiry] = useState<Date | undefined>()
-  const [shareMessage, setShareMessage] = useState('')
-  const [emergencyEmail, setEmergencyEmail] = useState('')
-  const [emergencyName, setEmergencyName] = useState('')
-  const [emergencyRelationship, setEmergencyRelationship] = useState('')
-  const [emergencyDelay, setEmergencyDelay] = useState(72)
   const [publicLinkEnabled, setPublicLinkEnabled] = useState(false)
-  const [publicLink, setPublicLink] = useState('')
-  const [showQRCode, setShowQRCode] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
+  const [shareToken, setShareToken] = useState('')
+  
+  // Form states
+  const [newContactEmail, setNewContactEmail] = useState('')
+  const [newContactName, setNewContactName] = useState('')
+  const [selectedPermissions, setSelectedPermissions] = useState<Permission[]>(['view'])
+  const [expirationDate, setExpirationDate] = useState<Date>()
+  const [shareMessage, setShareMessage] = useState('')
+  
+  // Emergency contact form
+  const [newEmergencyEmail, setNewEmergencyEmail] = useState('')
+  const [newEmergencyName, setNewEmergencyName] = useState('')
+  const [newEmergencyRelationship, setNewEmergencyRelationship] = useState('')
+  const [newEmergencyDelay, setNewEmergencyDelay] = useState(72)
+  
+  // UI states
+  const [showAddContact, setShowAddContact] = useState(false)
+  const [showAddEmergency, setShowAddEmergency] = useState(false)
+  const [showShareHistory, setShowShareHistory] = useState(false)
 
   // Generate public link when enabled
   useEffect(() => {
-    if (publicLinkEnabled && !publicLink) {
-      const link = `${window.location.origin}/shared/${capsuleId}?token=${generateShareToken()}`
-      setPublicLink(link)
+    if (publicLinkEnabled && !shareToken) {
+      setShareToken(generateShareToken())
     }
-  }, [publicLinkEnabled, capsuleId, publicLink])
+  }, [publicLinkEnabled, shareToken])
+
+  // Helper function to log activity
+  const logSharingActivity = async (action: string, description: string, metadata: any = {}) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      await supabase.from('activity_log').insert({
+        user_id: user.id,
+        capsule_id: capsuleId,
+        action,
+        description,
+        metadata: {
+          ...metadata,
+          capsule_title: capsuleTitle
+        }
+      })
+    } catch (error) {
+      console.error('Failed to log activity:', error)
+      // Don't throw error for logging failures
+    }
+  }
 
   const generateShareToken = () => {
-    return Math.random().toString(36).substring(2) + Date.now().toString(36)
+    return Math.random().toString(36).substr(2, 16) + Date.now().toString(36)
   }
 
   const addSharedContact = async () => {
-    if (!shareEmail.trim()) {
-      toast.error('Please enter an email address')
+    if (!newContactEmail) {
+      toast.error('Email is required')
       return
     }
 
-    if (sharedContacts.some(contact => contact.email === shareEmail)) {
-      toast.error('This email is already shared with')
+    if (!newContactEmail.includes('@')) {
+      toast.error('Please enter a valid email address')
       return
     }
 
-    setIsLoading(true)
-    
     try {
       const newContact: SharedContact = {
-        id: Date.now().toString(),
-        email: shareEmail,
-        permissions: sharePermissions,
+        id: Math.random().toString(36).substr(2, 9),
+        email: newContactEmail.toLowerCase().trim(),
+        name: newContactName || undefined,
+        permissions: selectedPermissions,
         sharedAt: new Date(),
-        expiresAt: shareExpiry,
+        expiresAt: expirationDate,
         status: 'pending'
       }
 
       const updatedContacts = [...sharedContacts, newContact]
       setSharedContacts(updatedContacts)
-      
-      // Send share notification (mock)
-      await sendShareNotification(newContact, shareMessage)
-      
+
       // Update parent component
       onUpdateSharing({
         isShared: true,
-        sharedWith: updatedContacts
+        sharedContacts: updatedContacts
       })
-      
-      // Log the sharing activity for notification
-      try {
-        await CapsuleService.logActivity(
-          capsuleId,
-          'shared',
-          `Shared capsule "${capsuleTitle}" with ${shareEmail}`,
-          { sharedTo: shareEmail, permissions: sharePermissions }
-        );
-      } catch (logError) {
-          console.warn("Failed to log sharing activity:", logError);
-      }
 
-      toast.success(`Capsule shared with ${shareEmail}`)
-      
+      // Log activity
+      await logSharingActivity(
+        'shared_capsule',
+        `Shared capsule "${capsuleTitle}" with ${newContactEmail}`,
+        {
+          shared_with: newContactEmail,
+          permissions: selectedPermissions,
+          expires_at: expirationDate?.toISOString()
+        }
+      )
+
+      // Send notification
+      await sendShareNotification(newContact, shareMessage)
+
       // Reset form
-      setShareEmail('')
-      setSharePermissions(['view'])
-      setShareExpiry(undefined)
+      setNewContactEmail('')
+      setNewContactName('')
+      setSelectedPermissions(['view'])
+      setExpirationDate(undefined)
       setShareMessage('')
-      
-    } catch (error) {
+      setShowAddContact(false)
+
+      toast.success(`Capsule shared with ${newContactEmail}`)
+
+    } catch (error: any) {
+      console.error('Failed to add shared contact:', error)
       toast.error('Failed to share capsule')
-    } finally {
-      setIsLoading(false)
     }
   }
 
   const removeSharedContact = async (contactId: string) => {
-    const contact = sharedContacts.find(c => c.id === contactId)
-    if (!contact) return
+    try {
+      const contact = sharedContacts.find(c => c.id === contactId)
+      if (!contact) return
 
-    const confirmed = confirm(`Remove sharing access for ${contact.email}?`)
-    if (!confirmed) return
+      const updatedContacts = sharedContacts.filter(c => c.id !== contactId)
+      setSharedContacts(updatedContacts)
 
-    const updatedContacts = sharedContacts.filter(c => c.id !== contactId)
-    setSharedContacts(updatedContacts)
-    
-    onUpdateSharing({
-      isShared: updatedContacts.length > 0,
-      sharedWith: updatedContacts
-    })
-    
-    toast.success(`Removed access for ${contact.email}`)
+      // Update parent component
+      onUpdateSharing({
+        isShared: updatedContacts.length > 0,
+        sharedContacts: updatedContacts
+      })
+
+      // Log activity
+      await logSharingActivity(
+        'unshared_capsule',
+        `Removed sharing access for ${contact.email}`,
+        {
+          removed_contact: contact.email
+        }
+      )
+
+      toast.success(`Removed access for ${contact.email}`)
+
+    } catch (error: any) {
+      console.error('Failed to remove shared contact:', error)
+      toast.error('Failed to remove access')
+    }
   }
 
   const updateContactPermissions = async (contactId: string, permissions: Permission[]) => {
-    const updatedContacts = sharedContacts.map(contact =>
-      contact.id === contactId ? { ...contact, permissions } : contact
-    )
-    setSharedContacts(updatedContacts)
-    
-    onUpdateSharing({
-      isShared: true,
-      sharedWith: updatedContacts
-    })
-    
-    toast.success('Permissions updated')
+    try {
+      const updatedContacts = sharedContacts.map(contact =>
+        contact.id === contactId ? { ...contact, permissions } : contact
+      )
+      setSharedContacts(updatedContacts)
+
+      // Update parent component
+      onUpdateSharing({
+        sharedContacts: updatedContacts
+      })
+
+      const contact = updatedContacts.find(c => c.id === contactId)
+      if (contact) {
+        // Log activity
+        await logSharingActivity(
+          'updated_permissions',
+          `Updated permissions for ${contact.email}`,
+          {
+            contact_email: contact.email,
+            new_permissions: permissions
+          }
+        )
+
+        toast.success(`Updated permissions for ${contact.email}`)
+      }
+
+    } catch (error: any) {
+      console.error('Failed to update permissions:', error)
+      toast.error('Failed to update permissions')
+    }
   }
 
   const addEmergencyContact = async () => {
-    if (!emergencyEmail.trim() || !emergencyName.trim()) {
-      toast.error('Please fill in all required fields')
+    if (!newEmergencyEmail || !newEmergencyName || !newEmergencyRelationship) {
+      toast.error('All fields are required')
       return
     }
 
-    if (emergencyContacts.some(contact => contact.email === emergencyEmail)) {
-      toast.error('This email is already added as an emergency contact')
-      return
-    }
+    try {
+      const newContact: EmergencyContact = {
+        id: Math.random().toString(36).substr(2, 9),
+        email: newEmergencyEmail.toLowerCase().trim(),
+        name: newEmergencyName,
+        relationship: newEmergencyRelationship,
+        activationDelay: newEmergencyDelay,
+        conditions: ['inactivity']
+      }
 
-    const newContact: EmergencyContact = {
-      id: Date.now().toString(),
-      email: emergencyEmail,
-      name: emergencyName,
-      relationship: emergencyRelationship || 'Emergency Contact',
-      activationDelay: emergencyDelay,
-      conditions: ['inactivity']
-    }
+      const updatedContacts = [...emergencyContacts, newContact]
+      setEmergencyContacts(updatedContacts)
 
-    const updatedContacts = [...emergencyContacts, newContact]
-    setEmergencyContacts(updatedContacts)
-    
-    // Reset form
-    setEmergencyEmail('')
-    setEmergencyName('')
-    setEmergencyRelationship('')
-    setEmergencyDelay(72)
-    
-    onUpdateSharing({
-      emergencyContacts: updatedContacts
-    })
-    
-    toast.success(`Added ${emergencyName} as emergency contact`)
+      // Update parent component
+      onUpdateSharing({
+        emergencyContacts: updatedContacts
+      })
+
+      // Log activity
+      await logSharingActivity(
+        'added_emergency_contact',
+        `Added emergency contact: ${newEmergencyName} (${newEmergencyEmail})`,
+        {
+          emergency_contact: newEmergencyEmail,
+          relationship: newEmergencyRelationship,
+          activation_delay: newEmergencyDelay
+        }
+      )
+
+      // Reset form
+      setNewEmergencyEmail('')
+      setNewEmergencyName('')
+      setNewEmergencyRelationship('')
+      setNewEmergencyDelay(72)
+      setShowAddEmergency(false)
+
+      toast.success(`Emergency contact added: ${newEmergencyName}`)
+
+    } catch (error: any) {
+      console.error('Failed to add emergency contact:', error)
+      toast.error('Failed to add emergency contact')
+    }
   }
 
   const removeEmergencyContact = async (contactId: string) => {
-    const contact = emergencyContacts.find(c => c.id === contactId)
-    if (!contact) return
+    try {
+      const contact = emergencyContacts.find(c => c.id === contactId)
+      if (!contact) return
 
-    const confirmed = confirm(`Remove ${contact.name} as emergency contact?`)
-    if (!confirmed) return
+      const updatedContacts = emergencyContacts.filter(c => c.id !== contactId)
+      setEmergencyContacts(updatedContacts)
 
-    const updatedContacts = emergencyContacts.filter(c => c.id !== contactId)
-    setEmergencyContacts(updatedContacts)
-    
-    onUpdateSharing({
-      emergencyContacts: updatedContacts
-    })
-    
-    toast.success(`Removed ${contact.name} from emergency contacts`)
+      // Update parent component
+      onUpdateSharing({
+        emergencyContacts: updatedContacts
+      })
+
+      // Log activity
+      await logSharingActivity(
+        'removed_emergency_contact',
+        `Removed emergency contact: ${contact.name}`,
+        {
+          removed_contact: contact.email
+        }
+      )
+
+      toast.success(`Removed emergency contact: ${contact.name}`)
+
+    } catch (error: any) {
+      console.error('Failed to remove emergency contact:', error)
+      toast.error('Failed to remove emergency contact')
+    }
   }
 
   const sendShareNotification = async (contact: SharedContact, message: string) => {
-    // Mock email sending
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    console.log('Share notification sent to:', contact.email)
+    try {
+      // Mock email sending - in real app, this would call your email service
+      console.log('Sending share notification:', {
+        to: contact.email,
+        subject: `${capsuleTitle} has been shared with you`,
+        message: message || `You have been granted access to the capsule "${capsuleTitle}".`
+      })
+
+      // In a real implementation, you would:
+      // 1. Call your email service API
+      // 2. Send push notification
+      // 3. Create in-app notification
+
+      toast.success(`Notification sent to ${contact.email}`)
+
+    } catch (error: any) {
+      console.error('Failed to send notification:', error)
+      toast.error('Failed to send notification')
+    }
   }
 
   const copyPublicLink = () => {
-    if (publicLink) {
-      navigator.clipboard.writeText(publicLink)
-      toast.success('Link copied to clipboard!')
-    }
+    const publicUrl = `${window.location.origin}/shared/${shareToken}`
+    navigator.clipboard.writeText(publicUrl)
+    toast.success('Public link copied to clipboard')
   }
 
   const getPermissionIcon = (permission: Permission) => {
     switch (permission) {
-      case 'view': return <Eye className="h-3 w-3" />
-      case 'download': return <Download className="h-3 w-3" />
-      case 'comment': return <Edit className="h-3 w-3" />
-      case 'share': return <Share2 className="h-3 w-3" />
+      case 'view': return <Eye className="h-4 w-4" />
+      case 'download': return <Download className="h-4 w-4" />
+      case 'comment': return <Edit className="h-4 w-4" />
+      case 'share': return <Share2 className="h-4 w-4" />
+      default: return <Eye className="h-4 w-4" />
     }
   }
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'accepted': return 'text-green-500'
-      case 'pending': return 'text-yellow-500'
-      case 'expired': return 'text-red-500'
-      case 'revoked': return 'text-gray-500'
-      default: return 'text-gray-500'
+      case 'accepted': return 'bg-green-100 text-green-800'
+      case 'pending': return 'bg-yellow-100 text-yellow-800'
+      case 'expired': return 'bg-red-100 text-red-800'
+      case 'revoked': return 'bg-gray-100 text-gray-800'
+      default: return 'bg-gray-100 text-gray-800'
     }
   }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'accepted': return <UserCheck className="h-4 w-4 text-green-500" />
-      case 'pending': return <Clock className="h-4 w-4 text-yellow-500" />
-      case 'expired': return <AlertTriangle className="h-4 w-4 text-red-500" />
-      case 'revoked': return <UserX className="h-4 w-4 text-gray-500" />
-      default: return <Clock className="h-4 w-4 text-gray-500" />
+      case 'accepted': return <UserCheck className="h-4 w-4" />
+      case 'pending': return <Clock className="h-4 w-4" />
+      case 'expired': return <AlertTriangle className="h-4 w-4" />
+      case 'revoked': return <UserX className="h-4 w-4" />
+      default: return <Clock className="h-4 w-4" />
     }
   }
 
   return (
     <div className="space-y-6">
-      {/* Share with Specific People */}
+      {/* Sharing Toggle */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center">
-            <Users className="h-5 w-5 mr-2" />
-            Share with People
-          </CardTitle>
-          <CardDescription>
-            Give specific people access to this capsule with custom permissions
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Share2 className="h-5 w-5" />
+                Capsule Sharing
+              </CardTitle>
+              <CardDescription>
+                Control who can access this capsule and what they can do
+              </CardDescription>
+            </div>
+            <Switch
+              checked={isShared}
+              onCheckedChange={(checked) => {
+                setIsShared(checked)
+                onUpdateSharing({ isShared: checked })
+              }}
+            />
+          </div>
         </CardHeader>
-        
-        <CardContent className="space-y-4">
-          {/* Add New Contact Form */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/30">
-            <div className="space-y-2">
-              <Label htmlFor="share-email">Email Address</Label>
-              <Input
-                id="share-email"
-                type="email"
-                placeholder="Enter email address"
-                value={shareEmail}
-                onChange={(e) => setShareEmail(e.target.value)}
-              />
+
+        {isShared && (
+          <CardContent className="space-y-4">
+            {/* Quick Actions */}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAddContact(true)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Contact
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPublicLinkEnabled(!publicLinkEnabled)}
+              >
+                <Link className="h-4 w-4 mr-2" />
+                {publicLinkEnabled ? 'Disable' : 'Enable'} Public Link
+              </Button>
             </div>
 
+            {/* Public Link */}
+            {publicLinkEnabled && (
+              <Card className="border-dashed">
+                <CardContent className="pt-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-medium">Public Link</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Anyone with this link can view the capsule
+                      </p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={copyPublicLink}>
+                      <Copy className="h-4 w-4 mr-2" />
+                      Copy Link
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Shared Contacts */}
+            {sharedContacts.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-medium">Shared With</h4>
+                {sharedContacts.map((contact) => (
+                  <Card key={contact.id}>
+                    <CardContent className="pt-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback>
+                              {contact.name?.[0] || contact.email[0].toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{contact.name || contact.email}</p>
+                            {contact.name && (
+                              <p className="text-sm text-muted-foreground">{contact.email}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {/* Permissions */}
+                          <div className="flex gap-1">
+                            {contact.permissions.map((permission) => (
+                              <Badge key={permission} variant="secondary" className="text-xs">
+                                {getPermissionIcon(permission)}
+                                <span className="ml-1 capitalize">{permission}</span>
+                              </Badge>
+                            ))}
+                          </div>
+
+                          {/* Status */}
+                          <Badge className={getStatusColor(contact.status)}>
+                            {getStatusIcon(contact.status)}
+                            <span className="ml-1 capitalize">{contact.status}</span>
+                          </Badge>
+
+                          {/* Actions */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  // Handle permission editing
+                                }}
+                              >
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit Permissions
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => sendShareNotification(contact, '')}
+                              >
+                                <Mail className="h-4 w-4 mr-2" />
+                                Send Reminder
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => removeSharedContact(contact.id)}
+                                className="text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Remove Access
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Emergency Contacts */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                Emergency Access
+              </CardTitle>
+              <CardDescription>
+                Configure trusted contacts for emergency access to your capsules
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAddEmergency(true)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Emergency Contact
+            </Button>
+          </div>
+        </CardHeader>
+
+        {emergencyContacts.length > 0 && (
+          <CardContent>
             <div className="space-y-2">
+              {emergencyContacts.map((contact) => (
+                <Card key={contact.id}>
+                  <CardContent className="pt-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback>
+                            {contact.name[0].toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-medium">{contact.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {contact.email} • {contact.relationship}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">
+                          <Clock className="h-3 w-3 mr-1" />
+                          {contact.activationDelay}h delay
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeEmergencyContact(contact.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Add Contact Dialog */}
+      <Dialog open={showAddContact} onOpenChange={setShowAddContact}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Share Capsule</DialogTitle>
+            <DialogDescription>
+              Add someone to share this capsule with and configure their permissions.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="email">Email Address *</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={newContactEmail}
+                  onChange={(e) => setNewContactEmail(e.target.value)}
+                  placeholder="user@example.com"
+                />
+              </div>
+              <div>
+                <Label htmlFor="name">Name (Optional)</Label>
+                <Input
+                  id="name"
+                  value={newContactName}
+                  onChange={(e) => setNewContactName(e.target.value)}
+                  placeholder="John Doe"
+                />
+              </div>
+            </div>
+
+            <div>
               <Label>Permissions</Label>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex gap-2 mt-2">
                 {(['view', 'download', 'comment', 'share'] as Permission[]).map((permission) => (
                   <Button
                     key={permission}
-                    variant={sharePermissions.includes(permission) ? 'default' : 'outline'}
+                    variant={selectedPermissions.includes(permission) ? "default" : "outline"}
                     size="sm"
                     onClick={() => {
-                      setSharePermissions(prev =>
-                        prev.includes(permission)
-                          ? prev.filter(p => p !== permission)
-                          : [...prev, permission]
-                      )
+                      if (selectedPermissions.includes(permission)) {
+                        setSelectedPermissions(prev => prev.filter(p => p !== permission))
+                      } else {
+                        setSelectedPermissions(prev => [...prev, permission])
+                      }
                     }}
                   >
                     {getPermissionIcon(permission)}
@@ -373,367 +696,102 @@ export function CapsuleSharing({
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Expiry Date (Optional)</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {shareExpiry ? format(shareExpiry, "PPP") : "No expiry"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={shareExpiry}
-                    onSelect={setShareExpiry}
-                    disabled={(date) => date < new Date()}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="share-message">Message (Optional)</Label>
+            <div>
+              <Label>Message (Optional)</Label>
               <Textarea
-                id="share-message"
-                placeholder="Add a personal message..."
                 value={shareMessage}
                 onChange={(e) => setShareMessage(e.target.value)}
-                className="min-h-[60px]"
+                placeholder="Add a personal message..."
+                rows={3}
               />
             </div>
 
-            <div className="md:col-span-2">
-              <Button 
-                onClick={addSharedContact} 
-                disabled={isLoading || !shareEmail.trim()}
-                className="w-full"
-              >
-                {isLoading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                    Sharing...
-                  </>
-                ) : (
-                  <>
-                    <Share2 className="h-4 w-4 mr-2" />
-                    Share Capsule
-                  </>
-                )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowAddContact(false)}>
+                Cancel
+              </Button>
+              <Button onClick={addSharedContact}>
+                Share Capsule
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
 
-          {/* Existing Shared Contacts */}
-          {sharedContacts.length > 0 && (
-            <div className="space-y-3">
-              <h4 className="font-medium">Shared With ({sharedContacts.length})</h4>
-              {sharedContacts.map((contact) => (
-                <motion.div
-                  key={contact.id}
-                  layout
-                  className="flex items-center justify-between p-3 border rounded-lg"
-                >
-                  <div className="flex items-center space-x-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback>
-                        {contact.name ? contact.name[0].toUpperCase() : contact.email[0].toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="font-medium">{contact.name || contact.email}</div>
-                      <div className="text-sm text-muted-foreground">
-                        Shared {format(contact.sharedAt, "MMM d, yy")}
-                        {contact.expiresAt && ` • Expires ${format(contact.expiresAt, "MMM d, yy")}`}
-                      </div>
-                    </div>
-                  </div>
+      {/* Add Emergency Contact Dialog */}
+      <Dialog open={showAddEmergency} onOpenChange={setShowAddEmergency}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Emergency Contact</DialogTitle>
+            <DialogDescription>
+              Add a trusted contact who can access your capsule in emergency situations.
+            </DialogDescription>
+          </DialogHeader>
 
-                  <div className="flex items-center space-x-2">
-                    {getStatusIcon(contact.status)}
-                    
-                    <div className="flex space-x-1">
-                      {contact.permissions.map((permission) => (
-                        <Badge key={permission} variant="outline" className="text-xs">
-                          {getPermissionIcon(permission)}
-                          <span className="ml-1">{permission}</span>
-                        </Badge>
-                      ))}
-                    </div>
-
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit Permissions
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Mail className="h-4 w-4 mr-2" />
-                          Resend Invitation
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          className="text-red-600"
-                          onClick={() => removeSharedContact(contact.id)}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Remove Access
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </motion.div>
-              ))}
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="emergency-email">Email Address *</Label>
+                <Input
+                  id="emergency-email"
+                  type="email"
+                  value={newEmergencyEmail}
+                  onChange={(e) => setNewEmergencyEmail(e.target.value)}
+                  placeholder="emergency@example.com"
+                />
+              </div>
+              <div>
+                <Label htmlFor="emergency-name">Full Name *</Label>
+                <Input
+                  id="emergency-name"
+                  value={newEmergencyName}
+                  onChange={(e) => setNewEmergencyName(e.target.value)}
+                  placeholder="Emergency Contact Name"
+                />
+              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* Public Link Sharing */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Link className="h-5 w-5 mr-2" />
-            Public Link Sharing
-          </CardTitle>
-          <CardDescription>
-            Create a shareable link that anyone can use to access this capsule
-          </CardDescription>
-        </CardHeader>
-        
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
             <div>
-              <Label htmlFor="public-link">Enable Public Link</Label>
-              <p className="text-sm text-muted-foreground">
-                Anyone with the link can view this capsule
-              </p>
-            </div>
-            <Switch
-              id="public-link"
-              checked={publicLinkEnabled}
-              onCheckedChange={setPublicLinkEnabled}
-            />
-          </div>
-
-          {publicLinkEnabled && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              className="space-y-3 border-t pt-4"
-            >
-              <div className="flex items-center space-x-2">
-                <Input value={publicLink} readOnly className="font-mono text-sm" />
-                <Button variant="outline" size="icon" onClick={copyPublicLink}>
-                  <Copy className="h-4 w-4" />
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="icon"
-                  onClick={() => setShowQRCode(true)}
-                >
-                  <QrCode className="h-4 w-4" />
-                </Button>
-              </div>
-              
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                  Link created {format(new Date(), "MMM d, yyyy 'at' h:mm a")}
-                </span>
-                <Button variant="ghost" size="sm">
-                  <History className="h-4 w-4 mr-1" />
-                  View Access Log
-                </Button>
-              </div>
-
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <div className="flex items-start space-x-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5" />
-                  <div className="text-sm text-amber-700">
-                    <strong>Security Warning:</strong> Anyone with this link can access your capsule. 
-                    Only share with trusted individuals.
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Emergency Access */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Shield className="h-5 w-5 mr-2 text-red-500" />
-            Emergency Access
-          </CardTitle>
-          <CardDescription>
-            Set up trusted contacts who can access this capsule in case of emergency
-          </CardDescription>
-        </CardHeader>
-        
-        <CardContent className="space-y-4">
-          {/* Add Emergency Contact Form */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-red-50/50">
-            <div className="space-y-2">
-              <Label htmlFor="emergency-email">Contact Email *</Label>
-              <Input
-                id="emergency-email"
-                type="email"
-                placeholder="trusted.person@example.com"
-                value={emergencyEmail}
-                onChange={(e) => setEmergencyEmail(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="emergency-name">Full Name *</Label>
-              <Input
-                id="emergency-name"
-                placeholder="John Doe"
-                value={emergencyName}
-                onChange={(e) => setEmergencyName(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="emergency-relationship">Relationship</Label>
-              <Select value={emergencyRelationship} onValueChange={setEmergencyRelationship}>
+              <Label htmlFor="relationship">Relationship *</Label>
+              <Select value={newEmergencyRelationship} onValueChange={setNewEmergencyRelationship}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select relationship" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="family">Family Member</SelectItem>
-                  <SelectItem value="spouse">Spouse/Partner</SelectItem>
-                  <SelectItem value="friend">Trusted Friend</SelectItem>
+                  <SelectItem value="spouse">Spouse</SelectItem>
+                  <SelectItem value="parent">Parent</SelectItem>
+                  <SelectItem value="child">Child</SelectItem>
+                  <SelectItem value="sibling">Sibling</SelectItem>
+                  <SelectItem value="friend">Friend</SelectItem>
                   <SelectItem value="lawyer">Lawyer</SelectItem>
-                  <SelectItem value="executor">Estate Executor</SelectItem>
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="emergency-delay">Activation Delay (Hours)</Label>
-              <Select 
-                value={emergencyDelay.toString()} 
-                onValueChange={(value) => setEmergencyDelay(parseInt(value))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="24">24 hours</SelectItem>
-                  <SelectItem value="48">48 hours</SelectItem>
-                  <SelectItem value="72">72 hours (recommended)</SelectItem>
-                  <SelectItem value="168">7 days</SelectItem>
-                  <SelectItem value="720">30 days</SelectItem>
-                </SelectContent>
-              </Select>
+            <div>
+              <Label htmlFor="delay">Activation Delay (hours)</Label>
+              <Input
+                id="delay"
+                type="number"
+                value={newEmergencyDelay}
+                onChange={(e) => setNewEmergencyDelay(parseInt(e.target.value) || 72)}
+                min="1"
+                max="8760"
+              />
+              <p className="text-sm text-muted-foreground mt-1">
+                How long to wait before granting emergency access
+              </p>
             </div>
 
-            <div className="md:col-span-2">
-              <Button 
-                onClick={addEmergencyContact}
-                disabled={!emergencyEmail.trim() || !emergencyName.trim()}
-                className="w-full"
-                variant="outline"
-              >
-                <Plus className="h-4 w-4 mr-2" />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowAddEmergency(false)}>
+                Cancel
+              </Button>
+              <Button onClick={addEmergencyContact}>
                 Add Emergency Contact
               </Button>
             </div>
-          </div>
-
-          {/* Emergency Contacts List */}
-          {emergencyContacts.length > 0 && (
-            <div className="space-y-3">
-              <h4 className="font-medium">Emergency Contacts ({emergencyContacts.length})</h4>
-              {emergencyContacts.map((contact) => (
-                <motion.div
-                  key={contact.id}
-                  layout
-                  className="flex items-center justify-between p-3 border rounded-lg bg-red-50/30"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100">
-                      <Shield className="h-4 w-4 text-red-600" />
-                    </div>
-                    <div>
-                      <div className="font-medium">{contact.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {contact.email} • {contact.relationship}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Activates after {contact.activationDelay} hours of inactivity
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    {contact.activated ? (
-                      <Badge variant="destructive">Activated</Badge>
-                    ) : contact.notificationSent ? (
-                      <Badge variant="outline">Notified</Badge>
-                    ) : (
-                      <Badge variant="secondary">Standby</Badge>
-                    )}
-
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeEmergencyContact(contact.id)}
-                      className="h-8 w-8 text-red-600 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          )}
-
-          {/* Emergency Protocol Info */}
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <h4 className="font-medium text-blue-800 mb-2">How Emergency Access Works</h4>
-            <ul className="text-sm text-blue-700 space-y-1">
-              <li>• Emergency contacts are notified if you're inactive for the specified period</li>
-              <li>• They receive access only after the activation delay expires</li>
-              <li>• You'll receive notifications before emergency access is granted</li>
-              <li>• You can cancel emergency access activation at any time</li>
-            </ul>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* QR Code Dialog */}
-      <Dialog open={showQRCode} onOpenChange={setShowQRCode}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>QR Code for Quick Sharing</DialogTitle>
-            <DialogDescription>
-              Scan this QR code to quickly access the capsule
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="flex items-center justify-center p-6">
-            <div className="w-48 h-48 bg-muted rounded-lg flex items-center justify-center">
-              <QrCode className="h-16 w-16 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground ml-2">QR Code</span>
-            </div>
-          </div>
-          
-          <div className="text-center">
-            <Button onClick={copyPublicLink} className="w-full">
-              <Copy className="h-4 w-4 mr-2" />
-              Copy Link Instead
-            </Button>
           </div>
         </DialogContent>
       </Dialog>

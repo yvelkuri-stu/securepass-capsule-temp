@@ -133,6 +133,24 @@ export function useAuth() {
     }
   }, [updateUser])
 
+  // Auth guard function for components that require authentication
+  const requireAuth = useCallback((redirectTo: string = '/auth/login') => {
+    if (!isLoading && !isAuthenticated) {
+      router.push(redirectTo)
+      return false
+    }
+    return isAuthenticated
+  }, [isAuthenticated, isLoading, router])
+
+  // Redirect if already authenticated (for login/register pages)
+  const redirectIfAuthenticated = useCallback((redirectTo: string = '/dashboard') => {
+    if (!isLoading && isAuthenticated) {
+      router.push(redirectTo)
+      return true
+    }
+    return false
+  }, [isAuthenticated, isLoading, router])
+
   return {
     // State
     user,
@@ -147,6 +165,8 @@ export function useAuth() {
     updateUser,
     clearError,
     refreshUser,
+    requireAuth,
+    redirectIfAuthenticated,
     
     // Utilities
     setLoading
