@@ -1,4 +1,4 @@
-// 📁 src/components/sharing/capsule-sharing.tsx (FIXED)
+// 📁 src/components/sharing/capsule-sharing.tsx (FIXED - Advanced Sharing)
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Calendar } from '@/components/ui/calendar'
-import {
+import { 
   Dialog,
   DialogContent,
   DialogDescription,
@@ -38,12 +38,12 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
   } from '@/components/ui/dropdown-menu'
-import {
-  Share2,
-  Users,
-  Clock,
-  Eye,
-  Download,
+import { 
+  Share2, 
+  Users, 
+  Clock, 
+  Eye, 
+  Download, 
   Edit,
   Trash2,
   AlertTriangle,
@@ -62,6 +62,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { CapsuleService } from '@/lib/capsules'
 
 interface SharedContact {
   id: string
@@ -161,19 +162,32 @@ export function CapsuleSharing({
       // Send share notification (mock)
       await sendShareNotification(newContact, shareMessage)
       
-      // Reset form
-      setShareEmail('')
-      setSharePermissions(['view'])
-      setShareExpiry(undefined)
-      setShareMessage('')
-      
       // Update parent component
       onUpdateSharing({
         isShared: true,
         sharedWith: updatedContacts
       })
       
+      // Log the sharing activity for notification
+      try {
+        await CapsuleService.logActivity(
+          capsuleId,
+          'shared',
+          `Shared capsule "${capsuleTitle}" with ${shareEmail}`,
+          { sharedTo: shareEmail, permissions: sharePermissions }
+        );
+      } catch (logError) {
+          console.warn("Failed to log sharing activity:", logError);
+      }
+
       toast.success(`Capsule shared with ${shareEmail}`)
+      
+      // Reset form
+      setShareEmail('')
+      setSharePermissions(['view'])
+      setShareExpiry(undefined)
+      setShareMessage('')
+      
     } catch (error) {
       toast.error('Failed to share capsule')
     } finally {
@@ -430,8 +444,8 @@ export function CapsuleSharing({
                     <div>
                       <div className="font-medium">{contact.name || contact.email}</div>
                       <div className="text-sm text-muted-foreground">
-                        Shared {format(contact.sharedAt, "MMM d, yyyy")}
-                        {contact.expiresAt && ` • Expires ${format(contact.expiresAt, "MMM d, yyyy")}`}
+                        Shared {format(contact.sharedAt, "MMM d, yy")}
+                        {contact.expiresAt && ` • Expires ${format(contact.expiresAt, "MMM d, yy")}`}
                       </div>
                     </div>
                   </div>

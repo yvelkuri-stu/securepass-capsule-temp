@@ -4,89 +4,201 @@ import { User } from '@/types'
 import { validateEnv } from './env'
 
 export class AuthService {
-  // Initialize and validate environment
+  private static isInitialized = false
+
   static init() {
-    validateEnv()
-  }
-
-  // Sign up with email and password
-  static async signUp(email: string, password: string, displayName: string) {
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          display_name: displayName
-        }
-      }
-    })
-
-    if (authError) throw authError
-
-    // Note: Profile creation will be handled by database trigger
-    return authData
-  }
-
-  // Sign in with email and password
-  static async signIn(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    })
-
-    if (error) throw error
-
-    // Update last login (optional - will work if RLS policies allow)
-    try {
-      if (data.user) {
-        await supabase
-          .from('profiles')
-          .update({ 
-            last_login_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', data.user.id)
-      }
-    } catch (err) {
-      console.warn('Could not update last login:', err)
-    }
-
-    return data
-  }
-
-  // Sign in with Google
-  static async signInWithGoogle() {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
-
-    if (error) throw error
-  }
-
-  // Sign out
-  static async signOut() {
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
-  }
-
-  // Get current session
-  static async getSession() {
-    const { data: { session }, error } = await supabase.auth.getSession()
-    if (error) throw error
-    return session
-  }
-
-  // Get current user with profile
-  static async getCurrentUser(): Promise<User | null> {
-    const { data: { user }, error } = await supabase.auth.getUser()
+    if (this.isInitialized) return
     
-    if (error) throw error
-    if (!user) return null
-
     try {
+      validateEnv()
+      this.isInitialized = true
+      console.log('AuthService initialized successfully')
+    } catch (error) {
+      console.error('AuthService initialization failed:', error)
+      throw new Error('Authentication service initialization failed')
+    }
+  }
+
+  static async signUp(email: string, password: string, displayName: string) {
+    try {
+      this.init()
+      
+      console.log('Attempting sign up for:', email)
+      
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            display_name: displayName,
+          },
+        },
+      })
+
+      if (error) {
+        console.error('Supabase signUp error:', error)
+        throw new Error(error.message)
+      }
+
+      if (!data.user) {
+        throw new Error('No user data returned from signup')
+      }
+
+      console.log('Sign up successful:', data.user.email)
+      return data
+      
+    } catch (error: any) {
+      console.error('SignUp error:', error)
+      
+      // Handle specific error cases
+      if (error.message?.includes('already registered')) {
+        throw new Error('An account with this email already exists')
+      } else if (error.message?.includes('Invalid email')) {
+        throw new Error('Please enter a valid email address')
+      } else if (error.message?.includes('Password should be')) {
+        throw new Error('Password must be at least 6 characters long')
+      } else if (error.message?.includes('Network')) {
+        throw new Error('Network error. Please check your connection and try again')
+      }
+      
+      throw new Error(error.message || 'Failed to create account')
+    }
+  }
+
+  static async signIn(email: string, password: string) {
+    try {
+      this.init()
+      
+      console.log('Attempting sign in for:', email)
+      
+      // Add connection timeout
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 25000) // 25 second timeout
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (error) {
+        console.error('Supabase signIn error:', error)
+        throw new Error(error.message)
+      }
+
+      if (!data.user) {
+        throw new Error('No user data returned from sign in')
+      }
+
+      console.log('Sign in successful:', data.user.email)
+      
+      // Update last login time
+      try {
+        await this.updateProfile({ lastLoginAt: new Date() })
+      } catch (profileError) {
+        console.warn('Failed to update last login time:', profileError)
+        // Don't fail the login for this
+      }
+
+      return data
+      
+    } catch (error: any) {
+      console.error('SignIn error:', error)
+      
+      // Handle specific error cases
+      if (error.name === 'AbortError') {
+        throw new Error('Login timeout. Please check your connection and try again')
+      } else if (error.message?.includes('Invalid login credentials')) {
+        throw new Error('Invalid email or password')
+      } else if (error.message?.includes('Email not confirmed')) {
+        throw new Error('Please check your email and confirm your account before signing in')
+      } else if (error.message?.includes('Too many requests')) {
+        throw new Error('Too many login attempts. Please wait a few minutes and try again')
+      } else if (error.message?.includes('Network')) {
+        throw new Error('Network error. Please check your connection and try again')
+      }
+      
+      throw new Error(error.message || 'Failed to sign in')
+    }
+  }
+
+  static async signInWithGoogle() {
+    try {
+      this.init()
+      
+      console.log('Attempting Google sign in')
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+
+      if (error) {
+        console.error('Google signIn error:', error)
+        throw new Error(error.message)
+      }
+
+      return data
+      
+    } catch (error: any) {
+      console.error('Google SignIn error:', error)
+      throw new Error(error.message || 'Failed to sign in with Google')
+    }
+  }
+
+  static async signOut() {
+    try {
+      console.log('Attempting sign out')
+      
+      const { error } = await supabase.auth.signOut()
+      
+      if (error) {
+        console.error('SignOut error:', error)
+        throw new Error(error.message)
+      }
+      
+      console.log('Sign out successful')
+      
+    } catch (error: any) {
+      console.error('SignOut error:', error)
+      throw new Error(error.message || 'Failed to sign out')
+    }
+  }
+
+  static async getSession() {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession()
+      
+      if (error) {
+        console.error('Get session error:', error)
+        return null
+      }
+      
+      return session
+      
+    } catch (error: any) {
+      console.error('Get session error:', error)
+      return null
+    }
+  }
+
+  static async getCurrentUser(): Promise<User | null> {
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser()
+      
+      if (error) {
+        console.error('Get current user error:', error)
+        return null
+      }
+      
+      if (!user) {
+        return null
+      }
+
+      // Get profile data
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
@@ -94,16 +206,16 @@ export class AuthService {
         .single()
 
       if (profileError) {
-        console.warn('Could not fetch profile:', profileError)
+        console.error('Get profile error:', profileError)
         // Return basic user info if profile fetch fails
         return {
           id: user.id,
-          email: user.email!,
+          email: user.email || '',
           displayName: user.user_metadata?.display_name || '',
           createdAt: new Date(user.created_at),
           lastLoginAt: new Date(),
           mfaEnabled: false,
-          securityScore: 75
+          securityScore: 75,
         }
       }
 
@@ -111,39 +223,53 @@ export class AuthService {
         id: profile.id,
         email: profile.email,
         displayName: profile.display_name || '',
-        profilePicture: profile.profile_picture || undefined,
+        profilePicture: profile.profile_picture,
         createdAt: new Date(profile.created_at),
-        lastLoginAt: new Date(profile.last_login_at || profile.created_at),
+        lastLoginAt: profile.last_login_at ? new Date(profile.last_login_at) : new Date(),
         mfaEnabled: profile.mfa_enabled,
-        securityScore: profile.security_score
+        securityScore: profile.security_score,
       }
-    } catch (err) {
-      console.error('Error fetching user profile:', err)
+      
+    } catch (error: any) {
+      console.error('Get current user error:', error)
       return null
     }
   }
 
-  // Update user profile
   static async updateProfile(updates: Partial<User>) {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) throw new Error('Not authenticated')
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        throw new Error('No authenticated user')
+      }
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        display_name: updates.displayName,
-        mfa_enabled: updates.mfaEnabled,
-        security_score: updates.securityScore,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', user.id)
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          display_name: updates.displayName,
+          profile_picture: updates.profilePicture,
+          last_login_at: updates.lastLoginAt?.toISOString(),
+          mfa_enabled: updates.mfaEnabled,
+          security_score: updates.securityScore,
+        })
+        .eq('id', user.id)
 
-    if (error) throw error
+      if (error) {
+        console.error('Update profile error:', error)
+        throw new Error(error.message)
+      }
+      
+    } catch (error: any) {
+      console.error('Update profile error:', error)
+      throw new Error(error.message || 'Failed to update profile')
+    }
   }
 
-  // Listen to auth changes
   static onAuthStateChange(callback: (user: User | null) => void) {
     return supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event, session?.user?.email)
+      
       if (session?.user) {
         const user = await this.getCurrentUser()
         callback(user)
@@ -151,5 +277,24 @@ export class AuthService {
         callback(null)
       }
     })
+  }
+
+  // Utility method to check if Supabase is properly configured
+  static async checkConnection() {
+    try {
+      const { data, error } = await supabase.from('profiles').select('count').limit(1)
+      
+      if (error) {
+        console.error('Supabase connection check failed:', error)
+        return false
+      }
+      
+      console.log('Supabase connection successful')
+      return true
+      
+    } catch (error) {
+      console.error('Supabase connection check failed:', error)
+      return false
+    }
   }
 }

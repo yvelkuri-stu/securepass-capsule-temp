@@ -1,51 +1,154 @@
-// 📁 src/hooks/useAuth.ts (FIXED - Proper redirect logic)
-'use client'
-
 import { useAuthStore } from '@/store/auth'
 import { useRouter } from 'next/navigation'
 import { useEffect, useCallback } from 'react'
+import { AuthService } from '@/lib/auth'
 
 export function useAuth() {
-  const auth = useAuthStore()
+  const {
+    user,
+    isAuthenticated,
+    isLoading,
+    error,
+    login: storeLogin,
+    logout: storeLogout,
+    register: storeRegister,
+    updateUser,
+    setLoading,
+    setError,
+    initialize
+  } = useAuthStore()
+
   const router = useRouter()
 
-  // Auto-redirect logic with better conditions
+  // Initialize auth state on mount
   useEffect(() => {
-    // Only redirect if we're not currently loading and have a clear auth state
-    if (!auth.isLoading) {
-      const currentPath = window.location.pathname
-      
-      if (auth.isAuthenticated && auth.user) {
-        // User is authenticated - redirect away from auth pages
-        if (currentPath.startsWith('/auth/') || currentPath === '/') {
-          console.log('✅ User authenticated, redirecting to dashboard')
-          router.push('/dashboard')
+    let isMounted = true
+
+    const initializeAuth = async () => {
+      try {
+        // Check if Supabase is properly configured
+        const isConnected = await AuthService.checkConnection()
+        if (!isConnected && isMounted) {
+          setError('Unable to connect to authentication service')
+          return
         }
-      } else {
-        // User is not authenticated - redirect to login if on protected pages
-        if (currentPath.startsWith('/dashboard')) {
-          console.log('❌ User not authenticated, redirecting to login')
-          router.push('/auth/login')
+
+        // Initialize the auth store
+        if (isMounted) {
+          initialize()
+        }
+      } catch (error: any) {
+        console.error('Auth initialization error:', error)
+        if (isMounted) {
+          setError('Authentication initialization failed')
         }
       }
     }
-  }, [auth.isAuthenticated, auth.isLoading, auth.user, router])
 
-  const requireAuth = useCallback(() => {
-    if (!auth.isAuthenticated && !auth.isLoading) {
+    initializeAuth()
+
+    return () => {
+      isMounted = false
+    }
+  }, [initialize, setError])
+
+  const login = useCallback(async (email: string, password: string) => {
+    if (!email || !password) {
+      throw new Error('Email and password are required')
+    }
+
+    try {
+      setLoading(true)
+      setError(null)
+
+      await storeLogin(email, password)
+      
+      // Successful login
+      return true
+      
+    } catch (error: any) {
+      console.error('Login hook error:', error)
+      setError(error.message)
+      throw error
+    } finally {
+      setLoading(false)
+    }
+  }, [storeLogin, setLoading, setError])
+
+  const register = useCallback(async (email: string, password: string, displayName: string) => {
+    if (!email || !password || !displayName) {
+      throw new Error('All fields are required')
+    }
+
+    try {
+      setLoading(true)
+      setError(null)
+
+      await storeRegister(email, password, displayName)
+      
+      // Successful registration
+      return true
+      
+    } catch (error: any) {
+      console.error('Register hook error:', error)
+      setError(error.message)
+      throw error
+    } finally {
+      setLoading(false)
+    }
+  }, [storeRegister, setLoading, setError])
+
+  const logout = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      await storeLogout()
+      
+      // Navigate to login after successful logout
       router.push('/auth/login')
+      
+    } catch (error: any) {
+      console.error('Logout hook error:', error)
+      setError(error.message)
+      throw error
+    } finally {
+      setLoading(false)
     }
-  }, [auth.isAuthenticated, auth.isLoading, router])
+  }, [storeLogout, router, setLoading, setError])
 
-  const redirectIfAuthenticated = useCallback(() => {
-    if (auth.isAuthenticated && !auth.isLoading) {
-      router.push('/dashboard')
+  const clearError = useCallback(() => {
+    setError(null)
+  }, [setError])
+
+  const refreshUser = useCallback(async () => {
+    try {
+      const currentUser = await AuthService.getCurrentUser()
+      if (currentUser) {
+        updateUser(currentUser)
+      }
+    } catch (error: any) {
+      console.error('Refresh user error:', error)
+      // Don't throw here, just log
     }
-  }, [auth.isAuthenticated, auth.isLoading, router])
+  }, [updateUser])
 
   return {
-    ...auth,
-    requireAuth,
-    redirectIfAuthenticated
+    // State
+    user,
+    isAuthenticated,
+    isLoading,
+    error,
+    
+    // Actions
+    login,
+    register,
+    logout,
+    updateUser,
+    clearError,
+    refreshUser,
+    
+    // Utilities
+    setLoading
   }
 }
